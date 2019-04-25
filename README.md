@@ -1,6 +1,6 @@
 # Universal Domain Adaptation
 
-Code release for  **Universal Domain Adaptation(CVPR 2019)** 
+Code release for  **[Universal Domain Adaptation(CVPR 2019)](https://youkaichao.github.io/files/cvpr2019/1628.pdf)** 
 
 ## Requirements
 - python 3
@@ -23,6 +23,10 @@ Code release for  **Universal Domain Adaptation(CVPR 2019)**
 - test
 
   `python main.py --config officehome-test-config.yaml`
+  
+- monitor (tensorboard required)
+
+  `tensorboard --logdir .`
 
 ## Checkpoints
 

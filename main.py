@@ -56,7 +56,6 @@ class TotalNet(nn.Module):
 
 totalNet = TotalNet()
 
-logger.add_graph(totalNet, torch.ones(2, 3, 224, 224))
 feature_extractor = nn.DataParallel(totalNet.feature_extractor, device_ids=gpu_ids, output_device=output_device).train(True)
 classifier = nn.DataParallel(totalNet.classifier, device_ids=gpu_ids, output_device=output_device).train(True)
 discriminator = nn.DataParallel(totalNet.discriminator, device_ids=gpu_ids, output_device=output_device).train(True)
@@ -182,8 +181,8 @@ while global_step < args.train.min_step:
         adv_loss_separate += nn.BCELoss()(domain_prob_discriminator_source_separate, torch.ones_like(domain_prob_discriminator_source_separate))
         adv_loss_separate += nn.BCELoss()(domain_prob_discriminator_target_separate, torch.zeros_like(domain_prob_discriminator_target_separate))
 
-        # ============================== cross entropy loss
-        ce = nn.CrossEntropyLoss(reduction='none')(predict_prob_source, label_source)
+        # ============================== cross entropy loss, it receives logits as its inputs
+        ce = nn.CrossEntropyLoss(reduction='none')(fc2_s, label_source)
         ce = torch.mean(ce, dim=0, keepdim=True)
 
         with OptimizerManager(
