@@ -3,7 +3,7 @@
 Code release for  **[Universal Domain Adaptation(CVPR 2019)](https://youkaichao.github.io/files/cvpr2019/1628.pdf)** 
 
 ## Requirements
-- python 3
+- python 3.6+
 - PyTorch 1.0
 
 `pip install -r requirements.txt`
