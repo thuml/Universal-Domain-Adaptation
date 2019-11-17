@@ -1,0 +1,37 @@
+data:
+  dataset:
+    name: visda2017 # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
+    root_path: data/visda2017 # /path/to/dataset/root
+    source: 0 # source domain index
+    target: 1 # target domain index
+    n_share: 6 # number of classes to be shared
+    n_source_private: 3 # number of classes in source private domain
+    n_total: 12 # number of classes in total
+
+  dataloader:
+    class_balance: true #
+    data_workers: 3 # how many workers to use for train dataloaders
+    batch_size: 36 # batch_size for source domain and target domain respectively
+
+model:
+  base_model: resnet50 # choices=['resnet50', 'vgg16']
+  pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
+
+train:
+  min_step: 30000 # minimum steps to run. run epochs until it exceeds the minStep
+  lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
+  weight_decay: 0.0005
+  momentum: 0.9
+
+test:
+  test_interval: 500 # interval of two continuous test phase
+  test_only: False # test a given model and exit
+  resume_file: '' # model to test
+  w_0: -0.5 # hyper-parameter w_0
+
+misc:
+  gpus: 1 # how many GPUs to be used, 0 indicates CPU only
+
+log:
+  root_dir: log # the log directory (log directory will be {root_dir}/{method}/time/)
+  log_interval: 10 # steps to log scalars
