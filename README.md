@@ -2,6 +2,9 @@
 
 Code release for  **[Universal Domain Adaptation(CVPR 2019)](https://youkaichao.github.io/files/cvpr2019/1628.pdf)** 
 
+## Note
+As the focus of my research has moved away from domain adaptation, this code repository may be obsolete someday. We are delighted to see that universal domain adaptation has received tremendous attention in the academic community, and readers are encouraged to discuss related questions with the authors of follow-up papers.
+
 ## Requirements
 - python 3.6+
 - PyTorch 1.0
