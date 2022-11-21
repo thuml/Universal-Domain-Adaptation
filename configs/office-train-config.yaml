@@ -1,7 +1,7 @@
 data:
   dataset:
     name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
-    root_path: data/office # /path/to/dataset/root
+    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
     source: 0 # source domain index
     target: 1 # target domain index
     n_share: 10 # number of classes to be shared
@@ -15,7 +15,7 @@ data:
 
 model:
   base_model: resnet50 # choices=['resnet50', 'vgg16']
-  pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
+  # pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
 
 train:
   min_step: 20000 # minimum steps to run. run epochs until it exceeds the minStep

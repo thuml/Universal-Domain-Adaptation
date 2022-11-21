@@ -1,65 +1,61 @@
 from data import *
 from net import *
 from lib import *
+import time
 import datetime
+import logging
+
+import torch
+from torch import nn
 from tqdm import tqdm
 if is_in_notebook():
     from tqdm import tqdm_notebook as tqdm
 from torch import optim
 from tensorboardX import SummaryWriter
 import torch.backends.cudnn as cudnn
+import pdb
+
+from models.uan import UAN
+from utils.logging import logger_init
+from utils.utils import seed_everything
+from data import get_class_per_split, get_dataloaders
+
 cudnn.benchmark = True
 cudnn.deterministic = True
 
 seed_everything()
 
-if args.misc.gpus < 1:
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    gpu_ids = []
-    output_device = torch.device('cpu')
-else:
-    gpu_ids = select_GPUs(args.misc.gpus)
-    output_device = gpu_ids[0]
+logger = logging.getLogger(__name__)
 
+gpu_ids = select_GPUs(args.misc.gpus)
+output_device = gpu_ids[0]
+
+## LOGGINGS ##
 now = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
-
 log_dir = f'{args.log.root_dir}/{now}'
-
-logger = SummaryWriter(log_dir)
-
+# init logger
+logger_init(logger, log_dir)
+# init tensorboard summarywriter
+writer = SummaryWriter(log_dir)
+# dump configs
 with open(join(log_dir, 'config.yaml'), 'w') as f:
     f.write(yaml.dump(save_config))
 
-model_dict = {
-    'resnet50': ResNet50Fc,
-    'vgg16': VGG16Fc
-}
+source_classes, target_classes, common_classes, source_private_classes, target_private_classes = get_class_per_split(args)
+source_train_dl, source_test_dl, target_train_dl, target_test_dl = get_dataloaders(source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
 
+# init model
+logger.info('Init model...')
+start_time = time.time()
+model = UAN(args, source_classes)
+end_time = time.time()
+loading_time = end_time - start_time
+logger.info(f'Done loading model. Total time {loading_time}')
 
-class TotalNet(nn.Module):
-    def __init__(self):
-        super(TotalNet, self).__init__()
-        self.feature_extractor = model_dict[args.model.base_model](args.model.pretrained_model)
-        classifier_output_dim = len(source_classes)
-        self.classifier = CLS(self.feature_extractor.output_num(), classifier_output_dim, bottle_neck_dim=256)
-        self.discriminator = AdversarialNetwork(256)
-        self.discriminator_separate = AdversarialNetwork(256)
-
-    def forward(self, x):
-        f = self.feature_extractor(x)
-        f, _, __, y = self.classifier(f)
-        d = self.discriminator(_)
-        d_0 = self.discriminator_separate(_)
-        return y, d, d_0
-
-
-totalNet = TotalNet()
-
-feature_extractor = nn.DataParallel(totalNet.feature_extractor, device_ids=gpu_ids, output_device=output_device).train(True)
-classifier = nn.DataParallel(totalNet.classifier, device_ids=gpu_ids, output_device=output_device).train(True)
-discriminator = nn.DataParallel(totalNet.discriminator, device_ids=gpu_ids, output_device=output_device).train(True)
-discriminator_separate = nn.DataParallel(totalNet.discriminator_separate, device_ids=gpu_ids, output_device=output_device).train(True)
+feature_extractor = nn.DataParallel(model.feature_extractor, device_ids=gpu_ids, output_device=output_device).train(True)
+classifier = nn.DataParallel(model.classifier, device_ids=gpu_ids, output_device=output_device).train(True)
+discriminator = nn.DataParallel(model.discriminator, device_ids=gpu_ids, output_device=output_device).train(True)
+discriminator_separate = nn.DataParallel(model.discriminator_separate, device_ids=gpu_ids, output_device=output_device).train(True)
 
 if args.test.test_only:
     assert os.path.exists(args.test.resume_file)
@@ -129,16 +125,26 @@ optimizer_discriminator_separate = OptimWithSheduler(
     optim.SGD(discriminator_separate.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
     scheduler)
 
+current_epoch = 0
 global_step = 0
 best_acc = 0
 
-total_steps = tqdm(range(args.train.min_step),desc='global step')
-epoch_id = 0
+# total steps / epochs
+steps_per_epoch = min(len(source_train_dl), len(target_train_dl))
+total_epoch = round(args.train.min_step / steps_per_epoch)
+logger.info(f'Total epoch {total_epoch}, steps per epoch {steps_per_epoch}, total step {args.train.min_step}')
+
+# log every epoch
+log_interval = steps_per_epoch
+# test every epoh
+test_interval = steps_per_epoch
+
+# total_steps = tqdm(range(args.train.min_step),desc='global step')
 
 while global_step < args.train.min_step:
 
-    iters = tqdm(zip(source_train_dl, target_train_dl), desc=f'epoch {epoch_id} ', total=min(len(source_train_dl), len(target_train_dl)))
-    epoch_id += 1
+    iters = tqdm(zip(source_train_dl, target_train_dl), desc=f'epoch {current_epoch} ', total=steps_per_epoch)
+    current_epoch += 1
 
     for i, ((im_source, label_source), (im_target, label_target)) in enumerate(iters):
 
@@ -152,22 +158,33 @@ while global_step < args.train.min_step:
         im_source = im_source.to(output_device)
         im_target = im_target.to(output_device)
 
+        # fc1_s : (batch_size, 2048)
         fc1_s = feature_extractor.forward(im_source)
         fc1_t = feature_extractor.forward(im_target)
 
+        # fc1_s                 : (batch, hidden_dim)
+        # feature_source        : (batch, bottleneck_dim)
+        # fc2_s                 : (batch, num_source_label)
+        # predict_prob_source   : (batch, num_source_label)
         fc1_s, feature_source, fc2_s, predict_prob_source = classifier.forward(fc1_s)
         fc1_t, feature_target, fc2_t, predict_prob_target = classifier.forward(fc1_t)
 
+        # shape : (batch, 1)
         domain_prob_discriminator_source = discriminator.forward(feature_source)
+        # shape : (batch, 1)
         domain_prob_discriminator_target = discriminator.forward(feature_target)
 
+        # shape : (batch, 1)
         domain_prob_discriminator_source_separate = discriminator_separate.forward(feature_source.detach())
+        # shape : (batch, 1)
         domain_prob_discriminator_target_separate = discriminator_separate.forward(feature_target.detach())
 
-        source_share_weight = get_source_share_weight(domain_prob_discriminator_source_separate, fc2_s, domain_temperature=1.0, class_temperature=10.0)
-        source_share_weight = normalize_weight(source_share_weight)
-        target_share_weight = get_target_share_weight(domain_prob_discriminator_target_separate, fc2_t, domain_temperature=1.0, class_temperature=1.0)
-        target_share_weight = normalize_weight(target_share_weight)
+        # shape : (batch, 1)
+        source_share_weight = model.get_source_share_weight(domain_prob_discriminator_source_separate, fc2_s, domain_temperature=1.0, class_temperature=10.0)
+        source_share_weight = model.normalize_weight(source_share_weight)
+        # shape : (batch, 1)
+        target_share_weight = model.get_target_share_weight(domain_prob_discriminator_target_separate, fc2_t, domain_temperature=1.0, class_temperature=1.0)
+        target_share_weight = model.normalize_weight(target_share_weight)
             
         # ==============================compute loss
         adv_loss = torch.zeros(1, 1).to(output_device)
@@ -191,18 +208,19 @@ while global_step < args.train.min_step:
             loss.backward()
 
         global_step += 1
-        total_steps.update()
 
-        if global_step % args.log.log_interval == 0:
+        if global_step % log_interval == 0:
             counter = AccuracyCounter()
             counter.addOneBatch(variable_to_numpy(one_hot(label_source, len(source_classes))), variable_to_numpy(predict_prob_source))
             acc_train = torch.tensor([counter.reportAccuracy()]).to(output_device)
-            logger.add_scalar('adv_loss', adv_loss, global_step)
-            logger.add_scalar('ce', ce, global_step)
-            logger.add_scalar('adv_loss_separate', adv_loss_separate, global_step)
-            logger.add_scalar('acc_train', acc_train, global_step)
+            writer.add_scalar('adv_loss', adv_loss, global_step)
+            writer.add_scalar('ce', ce, global_step)
+            writer.add_scalar('adv_loss_separate', adv_loss_separate, global_step)
+            writer.add_scalar('acc_train', acc_train, global_step)
 
-        if global_step % args.test.test_interval == 0:
+            pdb.set_trace()
+
+        if global_step % test_interval == 0:
 
             counters = [AccuracyCounter() for x in range(len(source_classes) + 1)]
             with TrainingModeManager([feature_extractor, classifier, discriminator_separate], train=False) as mgr, \
