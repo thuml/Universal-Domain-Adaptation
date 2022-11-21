@@ -6,17 +6,7 @@ class HScore():
 
         self.per_class_correct = np.zeros((unknown_class_index+1)).astype(np.float32)
         self.per_class_num = np.zeros((unknown_class_index+1)).astype(np.float32)
-
-    # predictions : (1, )
-    # references : (1, )
-    def add_batch(self, prediction, reference):
-
-        if prediction == reference:
-            self.per_class_correct[reference] += 1
-        
-        self.per_class_num[reference] += 1
     
-
     # predictions : (batch, )
     # references : (batch, )
     def add_batch(self, predictions, references):
@@ -24,8 +14,18 @@ class HScore():
         batch_size = predictions.shape[0]
 
         for index in range(batch_size):
-            prediction = predictions[index].detach().cpu().numpy()
-            reference = references[index].detach().cpu().numpy()
+            # for torch.tensor
+            if 'datach' in dir(predictions):
+                prediction = predictions[index].detach().cpu().numpy()
+                reference = references[index].detach().cpu().numpy()
+            # for numpy.ndarray
+            else:
+                prediction = predictions[index]
+                reference = references[index]
+
+            # update reference label
+            if reference >= self.unknown_class_index:
+                reference = self.unknown_class_index
 
             if prediction == reference:
                 self.per_class_correct[reference] += 1
@@ -42,21 +42,19 @@ class HScore():
 
         per_class_accuracy = per_class_correct / per_class_num
 
+        mean_accuracy = per_class_accuracy.mean() * 100
         known_accuracy = per_class_accuracy[:valid_count-1].mean() * 100
         unknown_accuracy = per_class_accuracy[valid_count-1] * 100
         h_score = 2 * known_accuracy * unknown_accuracy / (known_accuracy + unknown_accuracy)
             
         total_correct = per_class_correct.sum()
         total_samples = per_class_num.sum()
-        accuracy = total_correct / total_samples * 100
-
-
-        # import pdb
-        # pdb.set_trace()
+        total_accuracy = total_correct / total_samples * 100
 
         return {
             'h_score' : h_score,
             'known_accuracy' : known_accuracy,
             'unknown_accuracy' : unknown_accuracy,
-            'accuracy' : accuracy
+            'mean_accuracy' : mean_accuracy,
+            'total_accuracy' : total_accuracy
         }

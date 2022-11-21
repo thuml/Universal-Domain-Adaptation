@@ -1,14 +1,27 @@
-from config import *
+
+from os.path import join
+
 from easydl import *
 from collections import Counter
 from torchvision.transforms.transforms import *
 from torch.utils.data import DataLoader, WeightedRandomSampler
+
+from utils.data import Dataset
 
 '''
 assume classes across domains are the same.
 [0 1 ..................................................................... N - 1]
 |----common classes --||----source private classes --||----target private classes --|
 '''
+
+class Dataset:
+    def __init__(self, path, domains, files, prefix):
+        self.path = path
+        self.prefix = prefix
+        self.domains = domains
+        self.files = [(join(path, file)) for file in files]
+        self.prefixes = [self.prefix] * len(self.domains)
+
 
 def get_class_per_split(args):
     a, b, c = args.data.dataset.n_share, args.data.dataset.n_source_private, args.data.dataset.n_total
@@ -22,9 +35,55 @@ def get_class_per_split(args):
 
     return source_classes, target_classes, common_classes, source_private_classes, target_private_classes
 
+def get_dataset_file(args):
+    dataset = None
+    if args.data.dataset.name == 'office':
+        dataset = Dataset(
+        path=args.data.dataset.root_path,
+        domains=['amazon', 'dslr', 'webcam'],
+        files=[
+            'amazon_reorgnized.txt',
+            'dslr_reorgnized.txt',
+            'webcam_reorgnized.txt'
+        ],
+        prefix=args.data.dataset.root_path)
+    elif args.data.dataset.name == 'officehome':
+        dataset = Dataset(
+        path=args.data.dataset.root_path,
+        domains=['Art', 'Clipart', 'Product', 'Real_World'],
+        files=[
+            'Art.txt',
+            'Clipart.txt',
+            'Product.txt',
+            'Real_World.txt'
+        ],
+        prefix=args.data.dataset.root_path)
+    elif args.data.dataset.name == 'visda2017':
+        dataset = Dataset(
+        path=args.data.dataset.root_path,
+        domains=['train', 'validation'],
+        files=[
+            'train/image_list.txt',
+            'validation/image_list.txt',
+        ],
+        prefix=args.data.dataset.root_path)
+        dataset.prefixes = [join(dataset.path, 'train'), join(dataset.path, 'validation')]
+    else:
+        raise Exception(f'dataset {args.data.dataset.name} not supported!')
 
-def get_dataloaders(source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
+    source_domain_name = dataset.domains[args.data.dataset.source]
+    target_domain_name = dataset.domains[args.data.dataset.target]
+    source_file = dataset.files[args.data.dataset.source]
+    target_file = dataset.files[args.data.dataset.target]
+
+    return dataset, source_domain_name, target_domain_name, source_file, target_file
+
+
+
+def get_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
     
+    dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
+
     train_transform = Compose([
         Resize(256),
         RandomCrop(224),

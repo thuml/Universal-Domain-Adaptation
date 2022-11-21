@@ -20,7 +20,6 @@ from utils.logging import logger_init
 from utils.utils import seed_everything
 from utils.evaluation import HScore
 from utils.data import *
-# from utils.data import get_class_per_split, get_dataloaders
 
 cudnn.benchmark = True
 cudnn.deterministic = True
