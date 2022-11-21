@@ -86,45 +86,17 @@ class ResNet50Fc(BaseFeatureExtractor):
         return self.__in_features
 
 
-class AdversarialNetwork(nn.Module):
-    """
-    AdversarialNetwork with a gredient reverse layer.
-    its ``forward`` function calls gredient reverse layer first, then applies ``self.main`` module.
-    """
-    def __init__(self, in_feature):
-        super(AdversarialNetwork, self).__init__()
-        self.main = nn.Sequential(
-            nn.Linear(in_feature, 1024),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(1024,1024),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(1024, 1),
-            nn.Sigmoid()
-        )
-        self.grl = GradientReverseModule(lambda step: aToBSheduler(step, 0.0, 1.0, gamma=10, max_iter=10000))
-
-    def forward(self, x):
-        x_ = self.grl(x)
-        y = self.main(x_)
-        return y
-
-
-
 model_dict = {
     'resnet50': ResNet50Fc,
     # 'vgg16': VGG16Fc
 }
 
-class UAN(nn.Module):
+class ResNet(nn.Module):
     def __init__(self, args, source_classes):
-        super(UAN, self).__init__()
+        super(ResNet, self).__init__()
         self.feature_extractor = model_dict[args.model.base_model]()
         classifier_output_dim = len(source_classes)
         self.classifier = CLS(self.feature_extractor.output_num(), classifier_output_dim, bottle_neck_dim=256)
-        self.discriminator = AdversarialNetwork(256)
-        self.discriminator_separate = AdversarialNetwork(256)
 
     def forward(self, x):
         f = self.feature_extractor(x)
@@ -132,33 +104,3 @@ class UAN(nn.Module):
         d = self.discriminator(_)
         d_0 = self.discriminator_separate(_)
         return y, d, d_0
-
-        
-    def reverse_sigmoid(self, y):
-        return torch.log(y / (1.0 - y + 1e-10) + 1e-10)
-
-    def get_source_share_weight(self, domain_out, before_softmax, domain_temperature=1.0, class_temperature=10.0):
-        before_softmax = before_softmax / class_temperature
-        after_softmax = nn.Softmax(-1)(before_softmax)
-        domain_logit = self.reverse_sigmoid(domain_out)
-        domain_logit = domain_logit / domain_temperature
-        domain_out = nn.Sigmoid()(domain_logit)
-        
-        entropy = torch.sum(- after_softmax * torch.log(after_softmax + 1e-10), dim=1, keepdim=True)
-        entropy_norm = entropy / np.log(after_softmax.size(1))
-        weight = entropy_norm - domain_out
-        weight = weight.detach()
-        return weight
-
-
-    def get_target_share_weight(self, domain_out, before_softmax, domain_temperature=1.0, class_temperature=10.0):
-        return - self.get_source_share_weight(domain_out, before_softmax, domain_temperature, class_temperature)
-
-
-    def normalize_weight(self, x):
-        min_val = x.min()
-        max_val = x.max()
-        x = (x - min_val) / (max_val - min_val)
-        x = x / torch.mean(x)
-        return x.detach()
-

@@ -1,6 +1,5 @@
 import logging
 import os
-import json
 
 
 def logger_init(logger, output_dir, save_as_file=True):
@@ -22,3 +21,11 @@ def logger_init(logger, output_dir, save_as_file=True):
         file_handler = logging.FileHandler(logging_output_file)
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
+
+
+
+def print_dict(logger, string, dict):
+    logger.info(string)
+    for k,v in dict.items():
+        logger.info(f'{k} > {v}')
+    logger.info('\n\n')

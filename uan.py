@@ -16,11 +16,10 @@ import torch.backends.cudnn as cudnn
 import pdb
 
 from models.uan import UAN
-from utils.logging import logger_init
+from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
 from utils.evaluation import HScore
 from utils.data import *
-# from utils.data import get_class_per_split, get_dataloaders
 
 cudnn.benchmark = True
 cudnn.deterministic = True
@@ -55,6 +54,7 @@ def parse_args():
 def test(model, dataloader, output_device, unknown_class):
     metric = HScore(unknown_class)
 
+    model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
             im = im.to(output_device)
@@ -87,11 +87,12 @@ def main(args, save_config):
 
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/uan/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
-    writer = SummaryWriter(log_dir)
+    if not args.test.test_only:
+        writer = SummaryWriter(log_dir)
     # dump configs
     with open(join(log_dir, 'config.yaml'), 'w') as f:
         f.write(yaml.dump(save_config))
@@ -130,10 +131,7 @@ def main(args, save_config):
         model.load_state_dict(torch.load(state_dict_path))
         results = test(model, target_test_dl, output_device, unknown_class)
 
-        logger.info('======== Final Test Results ========')
-        for k,v in results.items():
-            logger.info(f'{k} > {v}')
-
+        print_dict(logger, string='======== Final Test Results ========', dict=results)
         exit(0)
     ## TEST ONLY ##
 
@@ -155,6 +153,7 @@ def main(args, save_config):
     current_epoch = 0
     global_step = 0
     best_acc = 0
+    best_results = None
     early_stop_count = 0
 
     # total steps / epochs
@@ -272,22 +271,20 @@ def main(args, save_config):
             if global_step % test_interval == 0:
                 logger.info('TEST...')
                 results = test(model, target_test_dl, output_device, unknown_class)
-                writer.add_scalar('test/mine_mean_acc_test', results['mean_accuracy'], global_step)
-                writer.add_scalar('test/mine_total_acc_test', results['total_accuracy'], global_step)
-                writer.add_scalar('test/mine_known_test', results['known_accuracy'], global_step)
-                writer.add_scalar('test/mine_unknown_test', results['unknown_accuracy'], global_step)
-                writer.add_scalar('test/mine_hscore_test', results['h_score'], global_step)
+                writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
+                writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
+                writer.add_scalar('test/known_test', results['known_accuracy'], global_step)
+                writer.add_scalar('test/unknown_test', results['unknown_accuracy'], global_step)
+                writer.add_scalar('test/hscore_test', results['h_score'], global_step)
 
                 # clear_output()
 
                 if results['mean_accuracy'] > best_acc:
                     best_acc = results['mean_accuracy']
+                    best_results = results
                     early_stop_count = 0
 
-                    logger.info(f'* Best accuracy at epoch {current_epoch}')
-                    for k,v in results.items():
-                        logger.info(f'{k} > {v}')
-                    logger.info('\n\n')
+                    print_dict(logger, string=f'* Best accuracy at epoch {current_epoch}', dict=results)
 
                     logger.info('Saving best model...')
                     torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
@@ -298,10 +295,14 @@ def main(args, save_config):
                         end_time = time.time()
                         logger.info(f'Done training at epoch {current_epoch}. Total time : {end_time-start_time}')     
 
+                        print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
+
                         exit()
                     early_stop_count += 1
                     logger.info(f'Early stopping : {early_stop_count} / {args.train.early_stop}')
 
+    
+    print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
     end_time = time.time()
     logger.info(f'Done training full step. Total time : {end_time-start_time}')
 

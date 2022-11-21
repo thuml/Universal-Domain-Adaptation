@@ -1,22 +1,24 @@
 
 import argparse
 import time
-import datetime
 import logging
+import copy
 
 import easydict
 import torch
 import yaml
+import numpy as np
 from torch import nn
 from tqdm import tqdm
+
 
 from torch import optim
 from tensorboardX import SummaryWriter
 import torch.backends.cudnn as cudnn
 import pdb
 
-from models.uan import UAN
-from utils.logging import logger_init
+from models.resnet import ResNet
+from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
 from utils.evaluation import HScore
 from utils.data import *
@@ -51,7 +53,65 @@ def parse_args():
 
     return args, save_config
 
-def test(model, dataloader, output_device, unknown_class):
+def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, end=1.0, step=0.005):
+    thresholds = list(np.arange(start, end, step))
+    num_thresholds = len(thresholds)
+
+    metric = HScore(unknown_class)
+
+
+    print(f'Number of thresholds : {num_thresholds}')
+
+    metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
+
+    model.eval()
+    with torch.no_grad():
+        for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
+            im = im.to(output_device)
+            label = label.to(output_device)
+
+            feature = model.feature_extractor.forward(im)
+            # shape : (batch, num_source_class)
+            _, _, _, predict_prob = model.classifier.forward(feature)
+
+            # shape : (batch, )
+            predictions = predict_prob.argmax(dim=-1)
+            # shape : (batch, )
+            max_logits = predict_prob.max(dim=-1).values
+
+            for index in range(num_thresholds):
+                tmp_predictions = predictions.clone().detach()
+                threshold = thresholds[index]
+
+                unknown = (max_logits < threshold).squeeze()
+                tmp_predictions[unknown] = unknown_class
+
+                metrics[index].add_batch(
+                    predictions=tmp_predictions,
+                    references=label
+                )
+    best_threshold = 0
+    best_accuracy = 0
+    best_results = None
+
+    for index in range(num_thresholds):
+        threshold = thresholds[index]
+
+        results = metrics[index].compute()
+        current_accuracy = results['mean_accuracy'] * 100
+
+        if current_accuracy >= best_accuracy:
+            best_accuracy = current_accuracy
+            best_threshold = threshold
+            best_results = results
+
+        # print(threshold, '->', total_accuracy)
+
+    return best_results, best_threshold
+
+
+
+def test_with_threshold(model, dataloader, output_device, unknown_class, threshold):
     metric = HScore(unknown_class)
 
     with torch.no_grad():
@@ -60,17 +120,16 @@ def test(model, dataloader, output_device, unknown_class):
             label = label.to(output_device)
 
             feature = model.feature_extractor.forward(im)
-            feature, __, before_softmax, predict_prob = model.classifier.forward(feature)
-            domain_prob = model.discriminator_separate.forward(__)
+            # shape : (batch, num_source_class)
+            _, _, _, predict_prob = model.classifier.forward(feature)
 
-            target_share_weight = model.get_target_share_weight(domain_prob, before_softmax, domain_temperature=1.0,
-                                                        class_temperature=1.0)
-
-            # OURS
             # shape (batch, )
             predictions = predict_prob.argmax(dim=-1)
+            # shape (batch, )
+            max_logits = predict_prob.max(dim=-1).values
+
             # pdb.set_trace()
-            predictions[target_share_weight.reshape(-1) < args.test.w_0] = unknown_class
+            predictions[max_logits < threshold] = unknown_class
             metric.add_batch(predictions=predictions, references=label)
     
     results = metric.compute()
@@ -86,7 +145,7 @@ def main(args, save_config):
 
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/fine_tuning/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
@@ -109,15 +168,13 @@ def main(args, save_config):
     ## INIT MODEL ##
     logger.info('Init model...')
     start_time = time.time()
-    model = UAN(args, source_classes)
+    model = ResNet(args, source_classes)
     end_time = time.time()
     loading_time = end_time - start_time
     logger.info(f'Done loading model. Total time {loading_time}')
 
     feature_extractor = nn.DataParallel(model.feature_extractor, device_ids=gpu_ids, output_device=output_device).train(True)
     classifier = nn.DataParallel(model.classifier, device_ids=gpu_ids, output_device=output_device).train(True)
-    discriminator = nn.DataParallel(model.discriminator, device_ids=gpu_ids, output_device=output_device).train(True)
-    discriminator_separate = nn.DataParallel(model.discriminator_separate, device_ids=gpu_ids, output_device=output_device).train(True)
     ## INIT MODEL ##
 
 
@@ -127,12 +184,9 @@ def main(args, save_config):
         state_dict_path = os.path.join(log_dir, 'best.pth')
         assert os.path.exists(state_dict_path)
         model.load_state_dict(torch.load(state_dict_path))
-        results = test(model, target_test_dl, output_device, unknown_class)
+        results = test_with_threshold(model, target_test_dl, output_device, unknown_class, args.test.threshold)
 
-        logger.info('======== Final Test Results ========')
-        for k,v in results.items():
-            logger.info(f'{k} > {v}')
-
+        print_dict(logger, string='======== Final Test Results ========', dict=results)
         exit(0)
     ## TEST ONLY ##
 
@@ -144,20 +198,17 @@ def main(args, save_config):
     optimizer_cls = OptimWithSheduler(
         optim.SGD(classifier.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
         scheduler)
-    optimizer_discriminator = OptimWithSheduler(
-        optim.SGD(discriminator.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
-        scheduler)
-    optimizer_discriminator_separate = OptimWithSheduler(
-        optim.SGD(discriminator_separate.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
-        scheduler)
-
+    
     current_epoch = 0
     global_step = 0
     best_acc = 0
+    best_threshold = 0
+    best_results = None
     early_stop_count = 0
 
     # total steps / epochs
-    steps_per_epoch = min(len(source_train_dl), len(target_train_dl))
+    # we only consider source domain samples
+    steps_per_epoch = len(source_train_dl)
     total_epoch = round(args.train.min_step / steps_per_epoch)
     logger.info(f'Total epoch {total_epoch}, steps per epoch {steps_per_epoch}, total step {args.train.min_step}')
 
@@ -173,16 +224,14 @@ def main(args, save_config):
 
     while global_step < args.train.min_step:
 
-        iters = tqdm(zip(source_train_dl, target_train_dl), desc=f'epoch {current_epoch} ', total=steps_per_epoch)
+        iters = tqdm(source_train_dl, desc=f'epoch {current_epoch} ', total=steps_per_epoch)
         current_epoch += 1
 
-        for i, ((im_source, label_source), (im_target, _)) in enumerate(iters):
+        for i, (im_source, label_source) in enumerate(iters):
 
             # save_label_target = label_target  # for debug usage
 
             label_source = label_source.to(output_device)
-            # label_target = label_target.to(output_device)
-            # label_target = torch.zeros_like(label_target)
 
             ####################
             #                  #
@@ -191,35 +240,15 @@ def main(args, save_config):
             ####################
 
             im_source = im_source.to(output_device)
-            im_target = im_target.to(output_device)
 
             # fc1_s : (batch_size, 2048)
             fc1_s = feature_extractor.forward(im_source)
-            fc1_t = feature_extractor.forward(im_target)
 
             # fc1_s                 : (batch, hidden_dim)
             # feature_source        : (batch, bottleneck_dim)
             # fc2_s                 : (batch, num_source_label)
             # predict_prob_source   : (batch, num_source_label)
             fc1_s, feature_source, fc2_s, predict_prob_source = classifier.forward(fc1_s)
-            fc1_t, feature_target, fc2_t, predict_prob_target = classifier.forward(fc1_t)
-
-            # shape : (batch, 1)
-            domain_prob_discriminator_source = discriminator.forward(feature_source)
-            # shape : (batch, 1)
-            domain_prob_discriminator_target = discriminator.forward(feature_target)
-
-            # shape : (batch, 1)
-            domain_prob_discriminator_source_separate = discriminator_separate.forward(feature_source.detach())
-            # shape : (batch, 1)
-            domain_prob_discriminator_target_separate = discriminator_separate.forward(feature_target.detach())
-
-            # shape : (batch, 1)
-            source_share_weight = model.get_source_share_weight(domain_prob_discriminator_source_separate, fc2_s, domain_temperature=1.0, class_temperature=10.0)
-            source_share_weight = model.normalize_weight(source_share_weight)
-            # shape : (batch, 1)
-            target_share_weight = model.get_target_share_weight(domain_prob_discriminator_target_separate, fc2_t, domain_temperature=1.0, class_temperature=1.0)
-            target_share_weight = model.normalize_weight(target_share_weight)
                 
             
             ####################
@@ -228,24 +257,12 @@ def main(args, save_config):
             #                  #
             ####################
 
-            adv_loss = torch.zeros(1, 1).to(output_device)
-            adv_loss_separate = torch.zeros(1, 1).to(output_device)
-
-            tmp = source_share_weight * nn.BCELoss(reduction='none')(domain_prob_discriminator_source, torch.ones_like(domain_prob_discriminator_source))
-            adv_loss += torch.mean(tmp, dim=0, keepdim=True)
-            tmp = target_share_weight * nn.BCELoss(reduction='none')(domain_prob_discriminator_target, torch.zeros_like(domain_prob_discriminator_target))
-            adv_loss += torch.mean(tmp, dim=0, keepdim=True)
-
-            adv_loss_separate += nn.BCELoss()(domain_prob_discriminator_source_separate, torch.ones_like(domain_prob_discriminator_source_separate))
-            adv_loss_separate += nn.BCELoss()(domain_prob_discriminator_target_separate, torch.zeros_like(domain_prob_discriminator_target_separate))
-
             # ============================== cross entropy loss
-            ce = nn.CrossEntropyLoss(reduction='none')(predict_prob_source, label_source)
-            ce = torch.mean(ce, dim=0, keepdim=True)
+            loss = nn.CrossEntropyLoss(reduction='none')(predict_prob_source, label_source)
+            loss = torch.mean(loss, dim=0, keepdim=True)
 
             with OptimizerManager(
-                    [optimizer_finetune, optimizer_cls, optimizer_discriminator, optimizer_discriminator_separate]):
-                loss = ce + adv_loss + adv_loss_separate
+                    [optimizer_finetune, optimizer_cls]):
                 loss.backward()
 
             global_step += 1
@@ -257,9 +274,7 @@ def main(args, save_config):
             ####################
 
             if global_step % log_interval == 0:
-                writer.add_scalar('train/adv_loss', adv_loss, current_epoch)
-                writer.add_scalar('train/ce', ce, current_epoch)
-                writer.add_scalar('train/adv_loss_separate', adv_loss_separate, current_epoch)
+                writer.add_scalar('train/loss', loss, current_epoch)
 
 
             ####################
@@ -270,23 +285,27 @@ def main(args, save_config):
             
             if global_step % test_interval == 0:
                 logger.info('TEST...')
-                results = test(model, target_test_dl, output_device, unknown_class)
-                writer.add_scalar('test/mine_mean_acc_test', results['mean_accuracy'], global_step)
-                writer.add_scalar('test/mine_total_acc_test', results['total_accuracy'], global_step)
-                writer.add_scalar('test/mine_known_test', results['known_accuracy'], global_step)
-                writer.add_scalar('test/mine_unknown_test', results['unknown_accuracy'], global_step)
-                writer.add_scalar('test/mine_hscore_test', results['h_score'], global_step)
+                # results = test(model, target_test_dl, output_device, unknown_class)
+
+                # find optimal threshold using test set = cheating
+                results, threshold = cheating_test(model, target_test_dl, output_device, unknown_class)
+                writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
+                writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
+                writer.add_scalar('test/known_test', results['known_accuracy'], global_step)
+                writer.add_scalar('test/unknown_test', results['unknown_accuracy'], global_step)
+                writer.add_scalar('test/hscore_test', results['h_score'], global_step)
+                writer.add_scalar('test/threshold', threshold, global_step)
 
                 # clear_output()
 
                 if results['mean_accuracy'] > best_acc:
                     best_acc = results['mean_accuracy']
+                    best_results = results
+                    best_threshold = threshold
                     early_stop_count = 0
 
-                    logger.info(f'* Best accuracy at epoch {current_epoch}')
-                    for k,v in results.items():
-                        logger.info(f'{k} > {v}')
-                    logger.info('\n\n')
+                    print_dict(logger, string=f'* Best accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
+
 
                     logger.info('Saving best model...')
                     torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
@@ -297,10 +316,13 @@ def main(args, save_config):
                         end_time = time.time()
                         logger.info(f'Done training at epoch {current_epoch}. Total time : {end_time-start_time}')     
 
+                        print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
+
                         exit()
                     early_stop_count += 1
                     logger.info(f'Early stopping : {early_stop_count} / {args.train.early_stop}')
-
+    
+    print_dict(logger, string=f'** BEST RESULTS with threshold {best_threshold}', dict=best_results)
     end_time = time.time()
     logger.info(f'Done training full step. Total time : {end_time-start_time}')
 
