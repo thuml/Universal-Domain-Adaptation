@@ -60,18 +60,14 @@ def test(model, dataloader, output_device, unknown_class):
             im = im.to(output_device)
             label = label.to(output_device)
 
-            feature = model.feature_extractor.forward(im)
-            feature, __, before_softmax, predict_prob = model.classifier.forward(feature)
-            domain_prob = model.discriminator_separate.forward(__)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, _, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-            target_share_weight = model.get_target_share_weight(domain_prob, before_softmax, domain_temperature=1.0,
-                                                        class_temperature=1.0)
-
-            # OURS
-            # shape (batch, )
-            predictions = predict_prob.argmax(dim=-1)
             # pdb.set_trace()
-            predictions[target_share_weight.reshape(-1) < args.test.w_0] = unknown_class
+            predictions[max_logits < args.test.w_0] = unknown_class
             metric.add_batch(predictions=predictions, references=label)
     
     results = metric.compute()

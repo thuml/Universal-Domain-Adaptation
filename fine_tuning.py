@@ -70,14 +70,12 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
             im = im.to(output_device)
             label = label.to(output_device)
 
-            feature = model.feature_extractor.forward(im)
-            # shape : (batch, num_source_class)
-            _, _, _, predict_prob = model.classifier.forward(feature)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-            # shape : (batch, )
-            predictions = predict_prob.argmax(dim=-1)
-            # shape : (batch, )
-            max_logits = predict_prob.max(dim=-1).values
 
             for index in range(num_thresholds):
                 tmp_predictions = predictions.clone().detach()
@@ -109,24 +107,21 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
 
     return best_results, best_threshold
 
-
-
 def test_with_threshold(model, dataloader, output_device, unknown_class, threshold):
     metric = HScore(unknown_class)
 
+    model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
             im = im.to(output_device)
             label = label.to(output_device)
 
-            feature = model.feature_extractor.forward(im)
-            # shape : (batch, num_source_class)
-            _, _, _, predict_prob = model.classifier.forward(feature)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-            # shape (batch, )
-            predictions = predict_prob.argmax(dim=-1)
-            # shape (batch, )
-            max_logits = predict_prob.max(dim=-1).values
 
             # pdb.set_trace()
             predictions[max_logits < threshold] = unknown_class

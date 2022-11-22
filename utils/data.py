@@ -8,6 +8,25 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from utils.data import Dataset
 
+# from : https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/lib.py#L107
+# data iterator that will never stop producing data
+class ForeverDataIterator:
+    def __init__(self, dataloader):
+        self.dataloader = dataloader
+        self.iter = iter(self.dataloader)
+
+    def __next__(self):
+        try:
+            data = next(self.iter)
+        except StopIteration:
+            self.iter = iter(self.dataloader)
+            data = next(self.iter)
+        
+        return data
+
+    def __len__(self):
+        return len(self.dataloader)
+
 '''
 assume classes across domains are the same.
 [0 1 ..................................................................... N - 1]

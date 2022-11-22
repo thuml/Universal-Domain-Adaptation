@@ -1,5 +1,6 @@
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torchvision import models
 
@@ -86,15 +87,11 @@ class ResClassifier_MME(nn.Module):
         self.fc.weight.data.normal_(0.0, 0.1)
 
 
-model_dict = {
-    'resnet50': ResNet50Fc,
-    # 'vgg16': VGG16Fc
-}
-
 class OVANET(nn.Module):
-    def __init__(self, args, source_classes):
+    def __init__(self, args, source_classes, **kwargs):
         super(OVANET, self).__init__()
         self.num_class = len(source_classes)
+        self.unknown_class = self.num_class
         self.hidden_dim = 2048
 
         self.G = ResBase()
@@ -105,10 +102,47 @@ class OVANET(nn.Module):
 
 
     def forward(self, x):
-        f = self.feature_extractor(x)
-        f, _, __, y = self.classifier(f)
-        d = self.discriminator(_)
-        d_0 = self.discriminator_separate(_)
-        return y, d, d_0
+        feat = self.G(x)
+        out_s = self.C1(feat)
+        out_open = self.C2(feat)
+
+        return out_s, out_open
+    
+
+    def get_prediction_and_logits(self, x):
+        # y : (batch, num_source_class)
+        # y = self.forward(x)
+
+        feat = self.G(x)
+        # shape : (batch, num_source_class)
+        out_t = self.C1(feat)
+
+        # shape : (batch, )
+        predictions = out_t.argmax(dim=-1)
+
+        # shape : (batch, num_source_class * 2)
+        out_open = self.C2(feat)
+        # shape : (batch, 2, num_source_class)
+        out_open = F.softmax(out_open.view(out_t.size(0), 2, -1), 1)
+
+        # shape : (batch, )
+        tmp_range = torch.range(0, out_t.size(0)-1).long().cuda()
+        # shape : (batch, )
+        # prob. of predicting "unknown"
+        pred_unk = out_open[tmp_range, 0, predictions]
+        # shape : (num_unknown, )
+        # index of "unknown" samples
+        ind_unk = np.where(pred_unk.data.cpu().numpy() > 0.5)[0]
+
+        # change predictions (unknowns)
+        predictions[ind_unk] = self.unknown_class
+
+        return {
+            'predictions' : predictions,
+            'total_logits' : out_t,
+            'max_logits' : pred_unk
+        }
+    
+
 
         

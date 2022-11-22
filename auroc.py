@@ -6,19 +6,18 @@ import datetime
 import logging
 import matplotlib.pyplot as plt
 
+import numpy as np
 import easydict
 import torch
 import yaml
-from torch import nn
 from tqdm import tqdm
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
-from torch import optim
-from tensorboardX import SummaryWriter
 import torch.backends.cudnn as cudnn
 import pdb
 
 from models import (
-    uan, resnet
+    uan, resnet, ovanet,
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
@@ -35,6 +34,7 @@ logger = logging.getLogger(__name__)
 METHOD_TO_MODEL = {
     'fine_tuning' : resnet.ResNet,
     'uan' : uan.UAN,
+    'ovanet' : ovanet.OVANET,
 }
 
 
@@ -68,14 +68,14 @@ def parse_args():
 
     return args, save_config
 
-def test(model, dataloader, output_device, unknown_class):
+def test(model, dataloader, unknown_class):
     metric = HScore(unknown_class)
 
     model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.to(output_device)
-            label = label.to(output_device)
+            im = im.cuda()
+            label = label.cuda()
 
             feature = model.feature_extractor.forward(im)
             feature, __, before_softmax, predict_prob = model.classifier.forward(feature)
@@ -94,14 +94,15 @@ def test(model, dataloader, output_device, unknown_class):
     results = metric.compute()
     return results
 
-
-def test_with_threshold(model, dataloader, output_device, unknown_class, threshold):
+# get results with a single threshold value
+def test_with_threshold(model, dataloader, unknown_class, threshold=None):
     metric = HScore(unknown_class)
 
+    model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.to(output_device)
-            label = label.to(output_device)
+            im = im.cuda()
+            label = label.cuda()
 
             # predictions   : (batch, )
             # max_logits    : (batch, )
@@ -110,15 +111,15 @@ def test_with_threshold(model, dataloader, output_device, unknown_class, thresho
             predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
 
-
-            # pdb.set_trace()
-            predictions[max_logits < threshold] = unknown_class
+            if threshold is not None:
+                predictions[max_logits < threshold] = unknown_class
             metric.add_batch(predictions=predictions, references=label)
     
     results = metric.compute()
     return results
 
-def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, end=1.0, step=0.005):
+# get best h-score value by tring every threshold values
+def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.005):
     logger.info(f'Check threshold from {start} ~ {end} with step {step}')
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
@@ -135,8 +136,8 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
     model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.to(output_device)
-            label = label.to(output_device)
+            im = im.cuda()
+            label = label.cuda()
 
             # predictions   : (batch, )
             # max_logits    : (batch, )
@@ -153,7 +154,6 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
                 unknown = (max_logits < threshold).squeeze()
                 tmp_predictions[unknown] = unknown_class
 
-                pdb.set_trace()
                 metrics[index].add_batch(
                     predictions=tmp_predictions,
                     references=label
@@ -166,61 +166,75 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
         threshold = thresholds[index]
 
         results = metrics[index].compute()
-        # current_hscore = results['h_score']
-        current_hscore = results['mean_accuracy']
+        current_hscore = results['h_score']
 
         if current_hscore >= best_hscore:
             best_hscore = current_hscore
             best_threshold = threshold
             best_results = results
-            print('\n*')
-
-        print(threshold, '>', current_hscore)
 
     max_logits_list = torch.concat(max_logits_list)
 
     return best_results, best_threshold, max_logits_list
 
-def get_all_predictions(model, dataloader, output_device, threshold=None):
-    exit()
-    labels = []
-    predictions = []
+
+from torch.nn.functional import one_hot
+# get all maximum logits values for calculating auroc
+def get_all_predictions(model, dataloader, unknown_class):
+    one_hot_labels_list = []
+    labels_list = []
+    predictions_list = []
+    logits_list = []
     
     model.eval()
     with torch.no_grad():
         for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.to(output_device)
-            label = label.to(output_device)
+            im = im.cuda()
+            label = label.cuda()
 
-        if threshold is not None:
-            # MSP thresholding
-            outputs = model.predict(**batch, threshold=threshold)
-        else:
-            outputs = model.predict(**batch)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-        prediction = outputs['unk_logits']
+            # shape : (batch, )
+            label[label >= unknown_class] = unknown_class
 
-        labels.append(label.cpu().detach().numpy())
-        predictions.append(prediction.cpu().detach().numpy())
+            # for in-domain <-> adaptable-domain (no unknown class)
+            # shape : (batch, num_source_class)
+            one_hot_label = one_hot(label, num_classes=unknown_class) if unknown_class not in label else None
+
+
+            labels_list.append(label.cpu().detach().numpy())
+            if one_hot_label is not None:
+                one_hot_labels_list.append(one_hot_label.cpu().detach().numpy())
+            predictions_list.append(max_logits.cpu().detach().numpy())
+            logits_list.append(total_logits.cpu().detach().numpy())
 
     # shape : (num_samples, )
     # concatenate all predictions and labels
-    labels = np.concatenate(labels)
-    predictions = np.concatenate(predictions)
+    labels = np.concatenate(labels_list)
+    one_hot_labels = np.concatenate(one_hot_labels_list) if len(one_hot_labels_list) > 0 else None
+    predictions = np.concatenate(predictions_list)
+    logits = np.concatenate(logits_list)
 
     return {
         'labels' : labels,
+        'one_hot_labels' : one_hot_labels,
         'predictions' : predictions,
+        'logits' : logits,
     }
+
+# calculate auroc
+def calculate_auroc(labels, predictions, unknown_index):
+    fpr, tpr, thresholds = roc_curve(labels, predictions, pos_label=unknown_index)
+    roc_auc = auc(fpr, tpr) * 100
+
+    return roc_auc
 
 def main(args, save_config):
 
-    ## GPU SETTINGS ##
-    gpu_ids = select_GPUs(args.misc.gpus)
-    output_device = gpu_ids[0]
-    ## GPU SETTINGS ##
-
-    
     ## LOGGINGS ##
     log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/{args.method}/{args.train.lr}'
     # init logger
@@ -250,32 +264,29 @@ def main(args, save_config):
     state_dict_path = os.path.join(log_dir, 'best.pth')
     logger.info(f'LOAD MODEL from : {state_dict_path}')
     assert os.path.exists(state_dict_path)
-    model.load_state_dict(torch.load(state_dict_path))
+    model.load_state_dict(torch.load(state_dict_path, map_location='cuda'))
     ## LOAD MODEL ##
     # pdb.set_trace()
 
-
-    
+    """
+    # show results with threshold from training.
     logger.info('* Results from training ...')
-    results = test_with_threshold(model, target_test_dl, output_device, unknown_class, args.threshold)
+    results = test_with_threshold(model, target_test_dl, unknown_class, args.threshold)
     print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
 
-
-
+    # show results with best h-score (cheating)
     logger.info('* Cheating test for best h-score....')
-    # results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, output_device, unknown_class)
-    results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, output_device, unknown_class, start=0.7, end=0.73)
+    results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold)
     print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
 
-    exit()
+    # show results with threshold at 95%
     total_count = len(max_logits_list)
     sorted_logits, indices = torch.sort(max_logits_list, descending=True)
     threshold_index = round(total_count * 0.95)
     threshold = sorted_logits[threshold_index]
 
-
     logger.info('* H-score @ 95 ...')
-    results = test_with_threshold(model, target_test_dl, output_device, unknown_class, threshold)
+    results = test_with_threshold(model, target_test_dl, unknown_class, threshold)
     print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
 
 
@@ -283,7 +294,7 @@ def main(args, save_config):
     logger.info('PLOT RESULTS ...')
     plt.plot(list(range(0, total_count)), sorted_logits.cpu().numpy())
 
-    plt.plot(threshold_index, threshold.cpu().item(), 'go', label=f'98% : {threshold.cpu().item()}')
+    plt.plot(threshold_index, threshold.cpu().item(), 'go', label=f'95% : {threshold.cpu().item()}')
     plt.axvline(x=threshold_index, color='g')
 
     # pdb.set_trace()
@@ -301,8 +312,7 @@ def main(args, save_config):
     plt.ylabel('Threshold')
     plt.legend()
     plt.savefig(os.path.join(log_dir, 'figure.png'))
-        
-    pdb.set_trace()
+    """
 
 
     #####################
@@ -310,12 +320,52 @@ def main(args, save_config):
     #  CALCULATE AUROC  #
     #                   #
     #####################
-
+    logger.info('** CALCULATE AUROC\n\n')
     source_dl, target_known_dl, target_unknown_dl = get_auroc_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
 
+    # in-domain predictions
+    source_outputs = get_all_predictions(model=model, dataloader=source_dl, unknown_class=unknown_class)
+    source_labels, one_hot_source_labels, source_predictions, source_logits = source_outputs['labels'], source_outputs['one_hot_labels'], source_outputs['predictions'], source_outputs['logits']
+
+    # adaptable-domain predictions
+    known_outputs = get_all_predictions(model=model, dataloader=target_known_dl, unknown_class=unknown_class)
+    known_labels, one_hot_known_labels, known_predictions, known_logits = known_outputs['labels'], known_outputs['one_hot_labels'], known_outputs['predictions'], known_outputs['logits']
+
+    # unknown-domain predictions
+    unknown_outputs = get_all_predictions(model=model, dataloader=target_unknown_dl, unknown_class=unknown_class)
+    unknown_labels, one_hot_unknown_labels, unknown_predictions, unknown_logits = unknown_outputs['labels'], unknown_outputs['one_hot_labels'], unknown_outputs['predictions'], unknown_outputs['logits']
+
+    ## in-domain <-> unknown
+    labels = np.concatenate([source_labels, unknown_labels])
+    predictions = np.concatenate([source_predictions, unknown_predictions])
+ 
+    auroc1 = calculate_auroc(labels, predictions, unknown_index=unknown_class)
+    
+    ## adaptable <-> unknown
+    labels = np.concatenate([known_labels, unknown_labels])
+    predictions = np.concatenate([known_predictions, unknown_predictions])
+ 
+    auroc2 = calculate_auroc(labels, predictions, unknown_index=unknown_class)
+
+    if auroc1 < 50 and auroc2 < 50:
+        auroc1 = 100 - auroc1
+        auroc2 = 100 - auroc2
+
+    
+    ## in-domain <-> adaptable
+    one_hot_labels = np.concatenate([one_hot_source_labels, one_hot_known_labels])
+    logits = np.concatenate([source_logits, known_logits])
+    auroc3 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovo') * 100
+    auroc4 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovr') * 100
+
+    logger.info(f'AUROC : IND   <-> UNKNOWN       : {auroc1}')
+    logger.info(f'AUROC : ADAPT <-> UNKNOWN       : {auroc2}')
+    logger.info(f'AUROC : IND   <-> UNKNOWN (ovo) : {auroc3}')
+    logger.info(f'AUROC : IND   <-> UNKNOWN (ovr) : {auroc4}')
 
 
-
+    
+    ## adaptable <-> unknown
 
 
     end_time = time.time()

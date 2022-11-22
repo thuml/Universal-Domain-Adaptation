@@ -94,6 +94,7 @@ model_dict = {
 class ResNet(nn.Module):
     def __init__(self, args, source_classes, **kwargs):
         super(ResNet, self).__init__()
+        print('INIT RESNET50')
         self.feature_extractor = model_dict[args.model.base_model]()
         classifier_output_dim = len(source_classes)
         self.classifier = CLS(self.feature_extractor.output_num(), classifier_output_dim, bottle_neck_dim=256)
