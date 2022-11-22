@@ -160,6 +160,7 @@ model_dict = {
 class UAN(nn.Module):
     def __init__(self, args, source_classes, **kwargs):
         super(UAN, self).__init__()
+        print('INIT UAN...')
         self.feature_extractor = model_dict[args.model.base_model]()
         classifier_output_dim = len(source_classes)
         self.classifier = CLS(self.feature_extractor.output_num(), classifier_output_dim, bottle_neck_dim=256)
@@ -173,9 +174,6 @@ class UAN(nn.Module):
         d_0 = self.discriminator_separate(_)
         return y, d, d_0
 
-    def get_prediction_logits(self, x):
-        y, d, d_0 = self.forward(x)
-        return y
 
     def reverse_sigmoid(self, y):
         return torch.log(y / (1.0 - y + 1e-10) + 1e-10)
@@ -205,3 +203,23 @@ class UAN(nn.Module):
         x = x / torch.mean(x)
         return x.detach()
 
+
+    def get_prediction_and_logits(self, x):
+        # feature           : (batch, hidden_dim)
+        # before_softmax    : (batch, num_source_label)
+        # predict_prob      : (batch, num_source_label)
+        feature = self.feature_extractor.forward(x)
+        feature, __, before_softmax, predict_prob = self.classifier.forward(feature)
+        domain_prob = self.discriminator_separate.forward(__)
+
+        target_share_weight = self.get_target_share_weight(domain_prob, before_softmax, domain_temperature=1.0,
+                                                        class_temperature=1.0)
+        
+        # shape : (batch, )
+        predictions = predict_prob.argmax(dim=-1)
+
+        return {
+            'predictions' : predictions,
+            'total_logits' : predict_prob,
+            'max_logits' : target_share_weight.reshape(-1) # for thresholding
+        }

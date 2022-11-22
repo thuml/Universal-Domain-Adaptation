@@ -103,14 +103,13 @@ def test_with_threshold(model, dataloader, output_device, unknown_class, thresho
             im = im.to(output_device)
             label = label.to(output_device)
 
-            feature = model.feature_extractor.forward(im)
-            # shape : (batch, num_source_class)
-            _, _, _, predict_prob = model.classifier.forward(feature)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-            # shape (batch, )
-            predictions = predict_prob.argmax(dim=-1)
-            # shape (batch, )
-            max_logits = predict_prob.max(dim=-1).values
+
 
             # pdb.set_trace()
             predictions[max_logits < threshold] = unknown_class
@@ -139,14 +138,12 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
             im = im.to(output_device)
             label = label.to(output_device)
 
-            feature = model.feature_extractor.forward(im)
-            # shape : (batch, num_source_class)
-            _, _, _, predict_prob = model.classifier.forward(feature)
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
 
-            # shape : (batch, )
-            predictions = predict_prob.argmax(dim=-1)
-            # shape : (batch, )
-            max_logits = predict_prob.max(dim=-1).values
             max_logits_list.append(max_logits)
 
             for index in range(num_thresholds):
@@ -156,6 +153,7 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
                 unknown = (max_logits < threshold).squeeze()
                 tmp_predictions[unknown] = unknown_class
 
+                pdb.set_trace()
                 metrics[index].add_batch(
                     predictions=tmp_predictions,
                     references=label
@@ -168,18 +166,23 @@ def cheating_test(model, dataloader, output_device, unknown_class, start=0.0, en
         threshold = thresholds[index]
 
         results = metrics[index].compute()
-        current_hscore = results['h_score']
+        # current_hscore = results['h_score']
+        current_hscore = results['mean_accuracy']
 
         if current_hscore >= best_hscore:
             best_hscore = current_hscore
             best_threshold = threshold
             best_results = results
+            print('\n*')
+
+        print(threshold, '>', current_hscore)
 
     max_logits_list = torch.concat(max_logits_list)
 
     return best_results, best_threshold, max_logits_list
 
 def get_all_predictions(model, dataloader, output_device, threshold=None):
+    exit()
     labels = []
     predictions = []
     
@@ -243,13 +246,13 @@ def main(args, save_config):
     loading_time = end_time - start_time
     logger.info(f'Done loading model. Total time {loading_time}')
     ## INIT MODEL ##
-
     ## LOAD MODEL ##
-    logger.info('LOAD MODEL ...')
     state_dict_path = os.path.join(log_dir, 'best.pth')
+    logger.info(f'LOAD MODEL from : {state_dict_path}')
     assert os.path.exists(state_dict_path)
     model.load_state_dict(torch.load(state_dict_path))
     ## LOAD MODEL ##
+    # pdb.set_trace()
 
 
     
@@ -258,10 +261,13 @@ def main(args, save_config):
     print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
 
 
+
     logger.info('* Cheating test for best h-score....')
-    results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, output_device, unknown_class)
+    # results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, output_device, unknown_class)
+    results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, output_device, unknown_class, start=0.7, end=0.73)
     print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
 
+    exit()
     total_count = len(max_logits_list)
     sorted_logits, indices = torch.sort(max_logits_list, descending=True)
     threshold_index = round(total_count * 0.95)
@@ -296,7 +302,7 @@ def main(args, save_config):
     plt.legend()
     plt.savefig(os.path.join(log_dir, 'figure.png'))
         
-    
+    pdb.set_trace()
 
 
     #####################

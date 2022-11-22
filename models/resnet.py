@@ -101,10 +101,22 @@ class ResNet(nn.Module):
     def forward(self, x):
         f = self.feature_extractor(x)
         f, _, __, y = self.classifier(f)
-        d = self.discriminator(_)
-        d_0 = self.discriminator_separate(_)
-        return y, d, d_0
-
-    def get_prediction_logits(self, x):
-        y, d, d_0 = self.forward(x)
         return y
+
+    def get_prediction_and_logits(self, x):
+        # y : (batch, num_source_class)
+        # y = self.forward(x)
+
+        f = self.feature_extractor(x)
+        f, _, __, y = self.classifier(f)
+
+        # shape : (batch, )
+        predictions = y.argmax(dim=-1)
+        max_logits = y.max(dim=-1).values
+
+        return {
+            'predictions' : predictions,
+            'total_logits' : y,
+            'max_logits' : max_logits
+        }
+    
