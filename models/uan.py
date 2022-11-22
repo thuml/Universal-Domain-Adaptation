@@ -158,7 +158,7 @@ model_dict = {
 }
 
 class UAN(nn.Module):
-    def __init__(self, args, source_classes):
+    def __init__(self, args, source_classes, **kwargs):
         super(UAN, self).__init__()
         self.feature_extractor = model_dict[args.model.base_model]()
         classifier_output_dim = len(source_classes)
@@ -173,7 +173,10 @@ class UAN(nn.Module):
         d_0 = self.discriminator_separate(_)
         return y, d, d_0
 
-        
+    def get_prediction_logits(self, x):
+        y, d, d_0 = self.forward(x)
+        return y
+
     def reverse_sigmoid(self, y):
         return torch.log(y / (1.0 - y + 1e-10) + 1e-10)
 

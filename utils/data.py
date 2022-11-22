@@ -123,3 +123,39 @@ def get_dataloaders(args, source_classes, target_classes, common_classes, source
                                 num_workers=1, drop_last=False)
 
     return source_train_dl, source_test_dl, target_train_dl, target_test_dl
+
+
+
+
+def get_auroc_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
+    
+    dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
+
+    test_transform = Compose([
+        Resize(256),
+        CenterCrop(224),
+        ToTensor()
+    ])
+
+    source_ds = FileListDataset(list_path=source_file,path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=test_transform, filter=(lambda x: x in source_classes))
+    target_known_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],
+                                transform=test_transform, filter=(lambda x: x in common_classes))
+    target_unknown_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],
+                                transform=test_transform, filter=(lambda x: x in target_private_classes))
+
+    classes = source_ds.labels
+    freq = Counter(classes)
+    class_weight = {x : 1.0 / freq[x] if args.data.dataloader.class_balance else 1.0 for x in freq}
+
+    source_weights = [class_weight[x] for x in source_ds.labels]
+    sampler = WeightedRandomSampler(source_weights, len(source_ds.labels))
+
+    source_dl = DataLoader(dataset=source_ds, batch_size=args.data.dataloader.batch_size, shuffle=False,
+                                num_workers=1, drop_last=False)
+    target_known_dl = DataLoader(dataset=target_known_ds, batch_size=args.data.dataloader.batch_size, shuffle=False,
+                                num_workers=1, drop_last=False)
+    target_unknown_dl = DataLoader(dataset=target_unknown_ds, batch_size=args.data.dataloader.batch_size, shuffle=False,
+                                num_workers=1, drop_last=False)
+
+    return source_dl, target_known_dl, target_unknown_dl

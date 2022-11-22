@@ -92,7 +92,7 @@ model_dict = {
 }
 
 class ResNet(nn.Module):
-    def __init__(self, args, source_classes):
+    def __init__(self, args, source_classes, **kwargs):
         super(ResNet, self).__init__()
         self.feature_extractor = model_dict[args.model.base_model]()
         classifier_output_dim = len(source_classes)
@@ -104,3 +104,7 @@ class ResNet(nn.Module):
         d = self.discriminator(_)
         d_0 = self.discriminator_separate(_)
         return y, d, d_0
+
+    def get_prediction_logits(self, x):
+        y, d, d_0 = self.forward(x)
+        return y

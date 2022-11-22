@@ -23,7 +23,7 @@ train:
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   weight_decay: 0.0005
   momentum: 0.9
-  early_stop: 50   # early stopping epoch
+  early_stop: 100   # early stopping epoch
 
 test:
   test_interval: 500 # interval of two continuous test phase
