@@ -3,8 +3,8 @@ data:
     name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
     root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
     # office : amazon (0), dslr (1), webcam (2)
-    source: 1 # source domain index
-    target: 2 # target domain index
+    source: 2 # source domain index
+    target: 0 # target domain index
     n_share: 10 # number of classes to be shared
     n_source_private: 10 # number of classes in source private domain
     n_total: 31 # number of classes in total
@@ -23,7 +23,7 @@ train:
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   weight_decay: 0.0005
   momentum: 0.9
-  early_stop: 50   # early stopping epoch
+  early_stop: 100   # early stopping epoch
 
 test:
   test_interval: 500 # interval of two continuous test phase

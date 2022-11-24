@@ -1,9 +1,10 @@
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 
 lrs='1e-2 5e-3 1e-3'
+# lrs='5e-3 1e-4 5e-5'
 
 
 ## OFFICE ##
@@ -22,7 +23,7 @@ for lr in $lrs; do
     python ovanet.py --config configs/ovanet-office-train-amazon-webcam.yaml --lr $lr
 done
 
-# dslr -> amazon
+# # dslr -> amazon
 for lr in $lrs; do
     python ovanet.py --config configs/ovanet-office-train-dslr-amazon.yaml --lr $lr
 done
@@ -30,14 +31,4 @@ done
 # dslr -> webcam
 for lr in $lrs; do
     python ovanet.py --config configs/ovanet-office-train-dslr-webcam.yaml --lr $lr
-done
-
-# webcam -> amazon
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-webcam-amazon.yaml --lr $lr
-done
-
-# webcam -> dslr
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-webcam-dslr.yaml --lr $lr
 done

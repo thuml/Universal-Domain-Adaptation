@@ -10,6 +10,7 @@ import numpy as np
 import easydict
 import torch
 import yaml
+from torch.nn.functional import one_hot
 from tqdm import tqdm
 from sklearn.metrics import roc_curve, auc, roc_auc_score
 
@@ -43,7 +44,7 @@ def parse_args():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
     parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
-    parser.add_argument('--threshold', type=float, default=0, help='Threshold from training.')
+    parser.add_argument('--threshold', type=float, default=None, help='Threshold from training.')
     parser.add_argument('--min_threshold', type=float, default=0.0, help='Minimum threshold value.')
     parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
     parser.add_argument('--method', type=str, default=None, help='Method to evaluate.')
@@ -178,7 +179,6 @@ def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.0
     return best_results, best_threshold, max_logits_list
 
 
-from torch.nn.functional import one_hot
 # get all maximum logits values for calculating auroc
 def get_all_predictions(model, dataloader, unknown_class):
     one_hot_labels_list = []
@@ -268,51 +268,53 @@ def main(args, save_config):
     ## LOAD MODEL ##
     # pdb.set_trace()
 
-    """
-    # show results with threshold from training.
-    logger.info('* Results from training ...')
-    results = test_with_threshold(model, target_test_dl, unknown_class, args.threshold)
-    print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
+    #"""
+    # check thresholding results only when threshold is not None
+    if args.threshold is not None:
+        # show results with threshold from training.
+        logger.info('* Results from training ...')
+        results = test_with_threshold(model, target_test_dl, unknown_class, args.threshold)
+        print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
 
-    # show results with best h-score (cheating)
-    logger.info('* Cheating test for best h-score....')
-    results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold)
-    print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
+        # show results with best h-score (cheating)
+        logger.info('* Cheating test for best h-score....')
+        results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold)
+        print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
 
-    # show results with threshold at 95%
-    total_count = len(max_logits_list)
-    sorted_logits, indices = torch.sort(max_logits_list, descending=True)
-    threshold_index = round(total_count * 0.95)
-    threshold = sorted_logits[threshold_index]
+        # show results with threshold at 95%
+        total_count = len(max_logits_list)
+        sorted_logits, indices = torch.sort(max_logits_list, descending=True)
+        threshold_index = round(total_count * 0.95)
+        threshold = sorted_logits[threshold_index]
 
-    logger.info('* H-score @ 95 ...')
-    results = test_with_threshold(model, target_test_dl, unknown_class, threshold)
-    print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
-
-
-    ## PLOT RESULTS ##
-    logger.info('PLOT RESULTS ...')
-    plt.plot(list(range(0, total_count)), sorted_logits.cpu().numpy())
-
-    plt.plot(threshold_index, threshold.cpu().item(), 'go', label=f'95% : {threshold.cpu().item()}')
-    plt.axvline(x=threshold_index, color='g')
-
-    # pdb.set_trace()
-    
-    best_index = ((sorted_logits > best_threshold).nonzero().squeeze()[-1].item())
-    plt.plot(best_index, best_threshold, 'ro', label=f'Best : {best_threshold}')
-    plt.axvline(x=best_index, color='r')
+        logger.info('* H-score @ 95 ...')
+        results = test_with_threshold(model, target_test_dl, unknown_class, threshold)
+        print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
 
 
-    train_index = ((sorted_logits > args.threshold).nonzero().squeeze()[-1].item())
-    plt.plot(train_index, args.threshold, 'yo', label=f'Train : {args.threshold}')
-    plt.axvline(x=train_index, color='y')
+        ## PLOT RESULTS ##
+        logger.info('PLOT RESULTS ...')
+        plt.plot(list(range(0, total_count)), sorted_logits.cpu().numpy())
 
-    plt.xlabel(f'Index')
-    plt.ylabel('Threshold')
-    plt.legend()
-    plt.savefig(os.path.join(log_dir, 'figure.png'))
-    """
+        plt.plot(threshold_index, threshold.cpu().item(), 'go', label=f'95% : {threshold.cpu().item()}')
+        plt.axvline(x=threshold_index, color='g')
+
+        # pdb.set_trace()
+        
+        best_index = ((sorted_logits > best_threshold).nonzero().squeeze()[-1].item())
+        plt.plot(best_index, best_threshold, 'ro', label=f'Best : {best_threshold}')
+        plt.axvline(x=best_index, color='r')
+
+
+        train_index = ((sorted_logits > args.threshold).nonzero().squeeze()[-1].item())
+        plt.plot(train_index, args.threshold, 'yo', label=f'Train : {args.threshold}')
+        plt.axvline(x=train_index, color='y')
+
+        plt.xlabel(f'Index')
+        plt.ylabel('Threshold')
+        plt.legend()
+        plt.savefig(os.path.join(log_dir, 'figure.png'))
+        #"""
 
 
     #####################

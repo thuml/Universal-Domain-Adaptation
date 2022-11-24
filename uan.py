@@ -77,7 +77,8 @@ def test(model, dataloader, output_device, unknown_class):
 def main(args, save_config):
 
     ## GPU SETTINGS ##
-    gpu_ids = select_GPUs(args.misc.gpus)
+    # gpu_ids = select_GPUs(args.misc.gpus)
+    gpu_ids = [0]
     output_device = gpu_ids[0]
     ## GPU SETTINGS ##
 
@@ -153,7 +154,7 @@ def main(args, save_config):
     early_stop_count = 0
 
     # total steps / epochs
-    steps_per_epoch = min(len(source_train_dl), len(target_train_dl))
+    steps_per_epoch = max(len(source_train_dl), len(target_train_dl))
     total_epoch = round(args.train.min_step / steps_per_epoch)
     logger.info(f'Total epoch {total_epoch}, steps per epoch {steps_per_epoch}, total step {args.train.min_step}')
 

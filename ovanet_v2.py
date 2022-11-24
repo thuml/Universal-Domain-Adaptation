@@ -125,7 +125,7 @@ def main(args, save_config):
     ## GPU SETTINGS ##
 
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/ovanet/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/ovanet_with_best_hscore/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
@@ -216,7 +216,7 @@ def main(args, save_config):
     
     
     current_epoch = 0
-    best_acc = 0
+    best_hscore = 0
     best_results = None
     early_stop_count = 0
 
@@ -321,12 +321,12 @@ def main(args, save_config):
             writer.add_scalar('test/hscore_test', results['h_score'], global_step)
 
 
-            if results['mean_accuracy'] > best_acc:
-                best_acc = results['mean_accuracy']
+            if results['h_score'] > best_hscore:
+                best_hscore = results['h_score']
                 best_results = results
                 early_stop_count = 0
 
-                print_dict(logger, string=f'* Best accuracy at epoch {current_epoch}', dict=results)
+                print_dict(logger, string=f'* Best H-score at epoch {current_epoch}', dict=results)
 
                 logger.info('Saving best model...')
                 torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))

@@ -36,9 +36,16 @@ def parse_args():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
     parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
+    parser.add_argument('--min_threshold', type=float, default=0.0, help='Minimum threshold value.')
+    parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
+    parser.add_argument('--step', type=float, default=0.005, help='Step value.')
 
     args = parser.parse_args()
     lr = args.lr
+    min_threshold = args.min_threshold
+    max_threshold = args.max_threshold
+    step = args.step
+
 
     config_file = args.config
 
@@ -50,6 +57,10 @@ def parse_args():
 
     if lr is not None:
         args.train.lr = lr
+
+    args.min_threshold = min_threshold
+    args.max_threshold = max_threshold
+    args.step = step
 
     return args, save_config
 
@@ -134,7 +145,8 @@ def test_with_threshold(model, dataloader, output_device, unknown_class, thresho
 def main(args, save_config):
 
     ## GPU SETTINGS ##
-    gpu_ids = select_GPUs(args.misc.gpus)
+    # gpu_ids = select_GPUs(args.misc.gpus)
+    gpu_ids = [0]
     output_device = gpu_ids[0]
     ## GPU SETTINGS ##
 
@@ -283,7 +295,7 @@ def main(args, save_config):
                 # results = test(model, target_test_dl, output_device, unknown_class)
 
                 # find optimal threshold using test set = cheating
-                results, threshold = cheating_test(model, target_test_dl, output_device, unknown_class)
+                results, threshold = cheating_test(model, target_test_dl, output_device, unknown_class, start=args.min_threshold, end=args.max_threshold, step=args.step)
                 writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
                 writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
                 writer.add_scalar('test/known_test', results['known_accuracy'], global_step)

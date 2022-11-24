@@ -90,6 +90,7 @@ class ResClassifier_MME(nn.Module):
 class OVANET(nn.Module):
     def __init__(self, args, source_classes, **kwargs):
         super(OVANET, self).__init__()
+        print('INIT OVANET...')
         self.num_class = len(source_classes)
         self.unknown_class = self.num_class
         self.hidden_dim = 2048

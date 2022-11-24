@@ -1,13 +1,13 @@
 data:
   dataset:
-    name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
-    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
-    # office : amazon (0), dslr (1), webcam (2)
-    source: 1 # source domain index
-    target: 2 # target domain index
-    n_share: 10 # number of classes to be shared
-    n_source_private: 10 # number of classes in source private domain
-    n_total: 31 # number of classes in total
+    name: visda # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
+    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/visda # /path/to/dataset/root
+    # visda only has a single source domain and a single target domain
+    source: 0 # source domain index
+    target: 1 # target domain index
+    n_share: 6 # number of classes to be shared
+    n_source_private: 3 # number of classes in source private domain
+    n_total: 12 # number of classes in total
 
   dataloader:
     class_balance: true #
@@ -19,11 +19,11 @@ model:
   # pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
 
 train:
-  min_step: 20000 # minimum steps to run. run epochs until it exceeds the minStep
+  min_step: 30000 # minimum steps to run. run epochs until it exceeds the minStep
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   weight_decay: 0.0005
   momentum: 0.9
-  early_stop: 50   # early stopping epoch
+  early_stop: 100   # early stopping epoch
 
 test:
   test_interval: 500 # interval of two continuous test phase

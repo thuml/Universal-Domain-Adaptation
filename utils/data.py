@@ -77,7 +77,7 @@ def get_dataset_file(args):
             'Real_World.txt'
         ],
         prefix=args.data.dataset.root_path)
-    elif args.data.dataset.name == 'visda2017':
+    elif args.data.dataset.name == 'visda':
         dataset = Dataset(
         path=args.data.dataset.root_path,
         domains=['train', 'validation'],
@@ -124,6 +124,10 @@ def get_dataloaders(args, source_classes, target_classes, common_classes, source
                                 transform=train_transform, filter=(lambda x: x in target_classes))
     target_test_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],
                                 transform=test_transform, filter=(lambda x: x in target_classes))
+    
+    print(f'\n\nsource train : {len(source_train_ds)}')
+    print(f'target train : {len(target_train_ds)}')
+    print(f'target test  : {len(target_test_ds)}\n\n')
 
     classes = source_train_ds.labels
     freq = Counter(classes)
@@ -140,6 +144,12 @@ def get_dataloaders(args, source_classes, target_classes, common_classes, source
                                 num_workers=args.data.dataloader.data_workers, drop_last=True)
     target_test_dl = DataLoader(dataset=target_test_ds, batch_size=args.data.dataloader.batch_size, shuffle=False,
                                 num_workers=1, drop_last=False)
+    
+    
+    print(f'\n\nsource train steps : {len(source_train_dl)}')
+    print(f'target train steps : {len(target_train_dl)}')
+    print(f'target test steps  : {len(target_test_dl)}\n\n')
+
 
     return source_train_dl, source_test_dl, target_train_dl, target_test_dl
 
