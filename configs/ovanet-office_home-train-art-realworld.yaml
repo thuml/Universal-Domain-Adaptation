@@ -1,0 +1,43 @@
+data:
+  dataset:
+    name: office-home # choices are ['office', 'office-home', 'caltech-imagenet', 'visda2017']
+    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office-home # /path/to/dataset/root
+    # office-home : art (0), clipart (1), product (2), realworld (3)
+    source: 0 # source domain index
+    target: 3 # target domain index
+    n_share: 10 # number of classes to be shared
+    n_source_private: 5 # number of classes in source private domain
+    n_total: 65 # number of classes in total
+
+  dataloader:
+    class_balance: true #
+    data_workers: 3 # how many workers to use for train dataloaders
+    batch_size: 36 # batch_size for source domain and target domain respectively
+
+model:
+  base_model: resnet50 # choices=['resnet50', 'vgg16']
+
+train:
+  min_step: 40000 # minimum steps to run. run epochs until it exceeds the minStep
+  lr: 0.01 # learning rate for new layers. learning rate for finetune is 1/10 of lr
+  weight_decay: 0.0005
+  momentum: 0.9
+  early_stop: 50
+  # from original code :
+  # https://github.com/VisionLearningGroup/OVANet/blob/d40020d2d59e617ca693ce5195b7b5a44a9893d5/configs/office-train-config_OPDA.yaml
+  multi: 0.1
+  weight_decay: 0.0005
+  sgd_momentum: 0.9
+  momentum: 0.00
+  eta: 0.05
+  thr: 1.49
+  margin: 0.5
+
+test:
+  test_only: False # test a given model and exit
+
+misc:
+  gpus: 1 # how many GPUs to be used, 0 indicates CPU only
+
+log:
+  root_dir: log # the log directory (log directory will be {root_dir}/{method}/time/)

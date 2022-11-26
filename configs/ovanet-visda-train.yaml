@@ -34,12 +34,9 @@ train:
 test:
   test_interval: 500 # interval of two continuous test phase
   test_only: False # test a given model and exit
-  resume_file: '' # model to test
-  threshold: -0.5 # hyper-parameter w_0
 
 misc:
   gpus: 1 # how many GPUs to be used, 0 indicates CPU only
 
 log:
   root_dir: log # the log directory (log directory will be {root_dir}/{method}/time/)
-  log_interval: 10 # steps to log scalars

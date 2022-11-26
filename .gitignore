@@ -1,6 +1,7 @@
 # custom
 /data/*
 /log/*
+/full_iter_log/*
 
 
 

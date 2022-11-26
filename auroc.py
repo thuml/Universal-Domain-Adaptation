@@ -18,7 +18,7 @@ import torch.backends.cudnn as cudnn
 import pdb
 
 from models import (
-    uan, resnet, ovanet,
+    uan, resnet, ovanet, dann
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
@@ -36,6 +36,7 @@ METHOD_TO_MODEL = {
     'fine_tuning' : resnet.ResNet,
     'uan' : uan.UAN,
     'ovanet' : ovanet.OVANET,
+    'dann' : dann.DANN,
 }
 
 
@@ -47,6 +48,7 @@ def parse_args():
     parser.add_argument('--threshold', type=float, default=None, help='Threshold from training.')
     parser.add_argument('--min_threshold', type=float, default=0.0, help='Minimum threshold value.')
     parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
+    parser.add_argument('--step', type=float, default=0.005, help='Steps for thresholding.')
     parser.add_argument('--method', type=str, default=None, help='Method to evaluate.')
 
     tmp_args = parser.parse_args()
@@ -66,6 +68,7 @@ def parse_args():
     args.min_threshold = tmp_args.min_threshold
     args.max_threshold = tmp_args.max_threshold
     args.method = tmp_args.method
+    args.step = tmp_args.step
 
     return args, save_config
 
@@ -268,17 +271,17 @@ def main(args, save_config):
     ## LOAD MODEL ##
     # pdb.set_trace()
 
-    #"""
+    # """
     # check thresholding results only when threshold is not None
     if args.threshold is not None:
-        # show results with threshold from training.
-        logger.info('* Results from training ...')
-        results = test_with_threshold(model, target_test_dl, unknown_class, args.threshold)
-        print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
+        # # show results with threshold from training.
+        # logger.info('* Results from training ...')
+        # results = test_with_threshold(model, target_test_dl, unknown_class, args.threshold)
+        # print_dict(logger, string=f'Result from training with threshold {args.threshold}', dict=results)
 
         # show results with best h-score (cheating)
         logger.info('* Cheating test for best h-score....')
-        results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold)
+        results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold, step=args.step)
         print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
 
         # show results with threshold at 95%
@@ -314,7 +317,7 @@ def main(args, save_config):
         plt.ylabel('Threshold')
         plt.legend()
         plt.savefig(os.path.join(log_dir, 'figure.png'))
-        #"""
+        # """
 
 
     #####################

@@ -1,9 +1,9 @@
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 
-lrs='5e-3 1e-3 5e-4'
+lrs='1e-2 5e-3 1e-3 5e-4'
 
 
 for lr in $lrs; do

@@ -1,0 +1,31 @@
+data:
+  dataset:
+    # OFFICE-31 configs
+    # name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
+    # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
+    # num_domains: 3
+    # n_share: 10 # number of classes to be shared
+    # n_source_private: 10 # number of classes in source private domain
+    # n_total: 31 # number of classes in total
+ 
+    # VISDA configs
+    # name: visda # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
+    # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/visda # /path/to/dataset/root
+    # num_domains: 2
+    # n_share: 6 # number of classes to be shared
+    # n_source_private: 3 # number of classes in source private domain
+    # n_total: 12 # number of classes in total
+
+    # Office-Home configs
+    name: office-home # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
+    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office-home # /path/to/dataset/root
+    num_domains: 4
+    n_share: 10 # number of classes to be shared
+    n_source_private: 5 # number of classes in source private domain
+    n_total: 65 # number of classes in total
+
+
+  dataloader:
+    class_balance: true #
+    data_workers: 3 # how many workers to use for train dataloaders
+    batch_size: 36 # batch_size for source domain and target domain respectively

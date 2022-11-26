@@ -125,7 +125,7 @@ def main(args, save_config):
     ## GPU SETTINGS ##
 
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/ovanet_with_best_hscore/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/ovanet_different_lr/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
@@ -180,9 +180,9 @@ def main(args, save_config):
             params += [{'params': [value], 'lr': args.train.multi,
                         'weight_decay': args.train.weight_decay}]
             
-    opt_g = optim.SGD(params, momentum=args.train.sgd_momentum,
+    opt_g = optim.SGD(params, momentum=args.train.sgd_momentum, lr=args.train.lr,
                       weight_decay=0.0005, nesterov=True)
-    opt_c = optim.SGD(list(model.C1.parameters()) + list(model.C2.parameters()), lr=1.0,
+    opt_c = optim.SGD(list(model.C1.parameters()) + list(model.C2.parameters()), lr=args.train.lr / 10,
                        momentum=args.train.sgd_momentum, weight_decay=0.0005,
                        nesterov=True)
 
@@ -247,7 +247,7 @@ def main(args, save_config):
                          init_lr=args.train.lr,
                          max_iter=args.train.min_step)
         inv_lr_scheduler(param_lr_c, opt_c, global_step,
-                         init_lr=args.train.lr,
+                         init_lr=args.train.lr / 10,
                          max_iter=args.train.min_step)
 
         # optimizer zero grad

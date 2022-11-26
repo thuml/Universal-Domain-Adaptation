@@ -66,7 +66,7 @@ def get_dataset_file(args):
             'webcam_reorgnized.txt'
         ],
         prefix=args.data.dataset.root_path)
-    elif args.data.dataset.name == 'officehome':
+    elif args.data.dataset.name == 'office-home':
         dataset = Dataset(
         path=args.data.dataset.root_path,
         domains=['Art', 'Clipart', 'Product', 'Real_World'],
@@ -166,6 +166,7 @@ def get_auroc_dataloaders(args, source_classes, target_classes, common_classes, 
         ToTensor()
     ])
 
+    # TODO : source_classes vs source_private_classes
     source_ds = FileListDataset(list_path=source_file,path_prefix=dataset.prefixes[args.data.dataset.source],
                                 transform=test_transform, filter=(lambda x: x in source_classes))
     target_known_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],

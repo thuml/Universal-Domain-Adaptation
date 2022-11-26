@@ -153,6 +153,7 @@ def main(args, save_config):
     
     ## LOGGINGS ##
     log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/fine_tuning/{args.train.lr}'
+    
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
