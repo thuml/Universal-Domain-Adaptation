@@ -342,12 +342,18 @@ def main(args, save_config):
                 early_stop_count = 0
 
                 results['threshold'] = threshold
-                print_dict(logger, string=f'* Best accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
+                print_dict(logger, string=f'* BEST accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
 
                 logger.info('Saving best model...')
                 torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
                 logger.info('Done saving...')
             else:
+                print_dict(logger, string=f'* Current accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
+
+                logger.info('Saving current model...')
+                torch.save(model.state_dict(), os.path.join(log_dir, 'current.pth'))
+                logger.info('Done saving...')
+
                 if early_stop_count == args.train.early_stop:
                     logger.info('End.')
                     end_time = time.time()

@@ -22,7 +22,7 @@ model:
   # pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
 
 train:
-  min_step: 20000 # minimum steps to run. run epochs until it exceeds the minStep
+  min_step: 10000 # minimum steps to run. run epochs until it exceeds the minStep
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   early_stop: 10000000   # early stopping epoch
   # from original code :
