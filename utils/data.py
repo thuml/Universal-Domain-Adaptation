@@ -155,7 +155,7 @@ def get_dataloaders(args, source_classes, target_classes, common_classes, source
 
 
 
-
+# get special dataloader for calculating auroc
 def get_auroc_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
     
     dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
@@ -189,3 +189,113 @@ def get_auroc_dataloaders(args, source_classes, target_classes, common_classes, 
                                 num_workers=1, drop_last=False)
 
     return source_dl, target_known_dl, target_unknown_dl
+
+
+
+
+########################
+#                      #
+#     ONLY FOR CMU     #
+#                      #
+########################
+
+from torchvision.transforms.transforms import *
+
+
+def get_transforms():
+    train_transform1 = Compose([
+        Resize(256),
+        RandomHorizontalFlip(),
+        RandomAffine(degrees=30, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=0.2, resample=Image.BICUBIC,
+                    fillcolor=(255, 255, 255)),
+        CenterCrop(224),
+        RandomGrayscale(p=0.5),
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ])
+
+    train_transform2 = Compose([
+        Resize(256),
+        RandomHorizontalFlip(),
+        RandomPerspective(),
+        FiveCrop(224),
+        Lambda(lambda crops: crops[0]),
+        ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ])
+
+    train_transform3 = Compose([
+        Resize(256),
+        RandomHorizontalFlip(),
+        RandomAffine(degrees=30, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=0.2, resample=Image.BICUBIC,
+                    fillcolor=(255, 255, 255)),
+        FiveCrop(224),
+        Lambda(lambda crops: crops[1]),
+        ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ])
+
+    train_transform4 = Compose([
+        Resize(256),
+        RandomHorizontalFlip(),
+        RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=0.1, resample=Image.BICUBIC,
+                    fillcolor=(255, 255, 255)),
+        RandomPerspective(),
+        FiveCrop(224),
+        Lambda(lambda crops: crops[2]),
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ])
+
+    train_transform5 = Compose([
+        Resize(256),
+        RandomHorizontalFlip(),
+        RandomPerspective(),
+        FiveCrop(224),
+        Lambda(lambda crops: crops[3]),
+        RandomGrayscale(p=0.5),
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ])
+
+    return train_transform1, train_transform2, train_transform3, train_transform4, train_transform5
+
+
+# get augmented source images for ensemble
+def esem_dataloader(args, source_classes):
+    
+    dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
+
+    train_transform1, train_transform2, train_transform3, train_transform4, train_transform5 = get_transforms()
+
+    ds1 = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=train_transform1, filter=(lambda x: x in source_classes))
+    ds2 = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=train_transform2, filter=(lambda x: x in source_classes))
+    ds3 = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=train_transform3, filter=(lambda x: x in source_classes))
+    ds4 = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=train_transform4, filter=(lambda x: x in source_classes))
+    ds5 = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
+                                transform=train_transform5, filter=(lambda x: x in source_classes))
+    
+    dl1 = DataLoader(dataset=ds1, batch_size=args.data.dataloader.batch_size,
+                            num_workers=args.data.dataloader.data_workers, drop_last=True)
+    dl2 = DataLoader(dataset=ds2, batch_size=args.data.dataloader.batch_size,
+                            num_workers=args.data.dataloader.data_workers, drop_last=True)
+    dl3 = DataLoader(dataset=ds3, batch_size=args.data.dataloader.batch_size,
+                            num_workers=args.data.dataloader.data_workers, drop_last=True)
+    dl4 = DataLoader(dataset=ds4, batch_size=args.data.dataloader.batch_size,
+                            num_workers=args.data.dataloader.data_workers, drop_last=True)
+    dl5 = DataLoader(dataset=ds5, batch_size=args.data.dataloader.batch_size,
+                            num_workers=args.data.dataloader.data_workers, drop_last=True)
+
+    return dl1, dl2, dl3, dl4, dl5
+
