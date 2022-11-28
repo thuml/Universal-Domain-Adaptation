@@ -24,7 +24,6 @@ from utils.data import *
 cudnn.benchmark = True
 cudnn.deterministic = True
 
-seed_everything()
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +33,11 @@ def parse_args():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
     parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
+    parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
 
     args = parser.parse_args()
     lr = args.lr
+    seed = args.seed
 
     config_file = args.config
 
@@ -48,6 +49,7 @@ def parse_args():
 
     if lr is not None:
         args.train.lr = lr
+    args.seed = seed
 
     return args, save_config
 
@@ -75,6 +77,7 @@ def test(model, dataloader, output_device, unknown_class):
 
 
 def main(args, save_config):
+    seed_everything(args.seed)
 
     ## GPU SETTINGS ##
     # gpu_ids = select_GPUs(args.misc.gpus)
@@ -84,7 +87,7 @@ def main(args, save_config):
 
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/uan/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/uan/{args.seed}/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter

@@ -26,7 +26,6 @@ from utils.data import *
 cudnn.benchmark = True
 cudnn.deterministic = True
 
-seed_everything()
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +38,7 @@ def parse_args():
     parser.add_argument('--min_threshold', type=float, default=0.0, help='Minimum threshold value.')
     parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
     parser.add_argument('--step', type=float, default=0.005, help='Step value.')
+    parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
 
 
     args = parser.parse_args()
@@ -46,6 +46,7 @@ def parse_args():
     min_threshold = args.min_threshold
     max_threshold = args.max_threshold
     step = args.step
+    seed = args.seed
 
 
     config_file = args.config
@@ -62,6 +63,7 @@ def parse_args():
     args.min_threshold = min_threshold
     args.max_threshold = max_threshold
     args.step = step
+    args.seed = seed
 
     return args, save_config
 
@@ -153,6 +155,7 @@ def inv_lr_scheduler(param_lr, optimizer, iter_num, gamma=10,
     return lr
 
 def main(args, save_config):
+    seed_everything(args.seed)
 
     ## GPU SETTINGS ##
     # gpu_ids = select_GPUs(args.misc.gpus)
@@ -162,7 +165,7 @@ def main(args, save_config):
     ## GPU SETTINGS ##
 
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/dann/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/dann/{args.seed}/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
