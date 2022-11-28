@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=0
 
 
 lrs='1e-2 5e-3 1e-3'
@@ -12,23 +12,30 @@ lrs='1e-2 5e-3 1e-3'
 # 1 : dslr
 # 2 : webcam
 
-# # DONE
-# # amazon -> dslr
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-amazon-dslr.yaml --lr $lr
-done
+seeds='2134 3412 4132'
 
-# amazon -> webcam
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-amazon-webcam.yaml --lr $lr
-done
+for seed in  $seeds; do
+    lrs='1e-2'
+    # amazon -> dslr
+    for lr in $lrs; do
+        python ovanet.py --config configs/ovanet-office-train-amazon-dslr.yaml --lr $lr --seed $seed
+    done
 
-# # dslr -> amazon
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-dslr-amazon.yaml --lr $lr
-done
+    lrs='1e-2 1e-4'
+    # amazon -> webcam
+    for lr in $lrs; do
+        python ovanet.py --config configs/ovanet-office-train-amazon-webcam.yaml --lr $lr --seed $seed
+    done
 
-# dslr -> webcam
-for lr in $lrs; do
-    python ovanet.py --config configs/ovanet-office-train-dslr-webcam.yaml --lr $lr
+    lrs='1e-2'
+    # # dslr -> amazon
+    for lr in $lrs; do
+        python ovanet.py --config configs/ovanet-office-train-dslr-amazon.yaml --lr $lr --seed $seed
+    done
+
+    lrs='1e-2 1e-3'
+    # dslr -> webcam
+    for lr in $lrs; do
+        python ovanet.py --config configs/ovanet-office-train-dslr-webcam.yaml --lr $lr --seed $seed
+    done
 done
