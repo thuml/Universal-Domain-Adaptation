@@ -12,7 +12,7 @@ data:
   dataloader:
     class_balance: true #
     data_workers: 3 # how many workers to use for train dataloaders
-    batch_size: 36 # batch_size for source domain and target domain respectively
+    batch_size: 16 # batch_size for source domain and target domain respectively
 
 model:
   base_model: resnet50 # choices=['resnet50', 'vgg16']
