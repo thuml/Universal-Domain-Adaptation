@@ -1,0 +1,41 @@
+[easydl] tensorflow not available!
+SET RANDOM SEED = 1234
+
+
+source train : 1808
+target train : 332
+target test  : 332
+
+
+
+
+source train steps : 56
+target train steps : 10
+target test steps  : 11
+
+
+INIT DANCE...
+torch.Size([32, 20]) 0 32 32 0 32
+> /home/heyjoonkim/Universal-Domain-Adaptation/dance.py(326)main()
+-> feat_mat = lemniscate(feat_t, index_t)
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) --KeyboardInterrupt--
+(Pdb) (Pdb) 
+Program interrupted. (Use 'cont' to resume).
+--Return--
+> /home/heyjoonkim/anaconda3/envs/dev/lib/python3.8/site-packages/torch/autograd/__init__.py(154)backward()->None
+-> Variable._execution_engine.run_backward(
+(Pdb) 
