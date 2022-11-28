@@ -27,7 +27,6 @@ from utils.data import *
 cudnn.benchmark = True
 cudnn.deterministic = True
 
-seed_everything()
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +36,11 @@ def parse_args():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
     parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
+    parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
 
     args = parser.parse_args()
     lr = args.lr
+    seed = args.seed
 
     config_file = args.config
 
@@ -51,6 +52,7 @@ def parse_args():
 
     if lr is not None:
         args.train.lr = lr
+    args.seed = seed
 
     return args, save_config
 
@@ -75,6 +77,12 @@ def get_consistency(y_1, y_2, y_3, y_4, y_5):
 
 # https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/lib.py#L191
 def get_entropy(y_1, y_2, y_3, y_4, y_5):
+    y_1 = nn.Softmax(-1)(y_1)
+    y_2 = nn.Softmax(-1)(y_2)
+    y_3 = nn.Softmax(-1)(y_3)
+    y_4 = nn.Softmax(-1)(y_4)
+    y_5 = nn.Softmax(-1)(y_5)
+
     entropy1 = torch.sum(- y_1 * torch.log(y_1 + 1e-10), dim=1)
     entropy2 = torch.sum(- y_2 * torch.log(y_2 + 1e-10), dim=1)
     entropy3 = torch.sum(- y_3 * torch.log(y_3 + 1e-10), dim=1)
@@ -102,290 +110,39 @@ def get_confidence(y_1, y_2, y_3, y_4, y_5):
     confidence = (conf_1 + conf_2 + conf_3 + conf_4 + conf_5) / 5
     return confidence
 
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/lib.py#L9
-class StepwiseLR:
-    """
-    A lr_scheduler that update learning rate using the following schedule:
-    .. math::
-        \text{lr} = \text{init_lr} \times \text{lr_mult} \times (1+\gamma i)^{-p},
-    where `i` is the iteration steps.
-    Parameters:
-        - **optimizer**: Optimizer
-        - **init_lr** (float, optional): initial learning rate. Default: 0.01
-        - **gamma** (float, optional): :math:`\gamma`. Default: 0.001
-        - **decay_rate** (float, optional): :math:`p` . Default: 0.75
-    """
-
-    def __init__(self, optimizer, init_lr = 0.01, gamma = 0.001, decay_rate = 0.75):
-        self.init_lr = init_lr
-        self.gamma = gamma
-        self.decay_rate = decay_rate
-        self.optimizer = optimizer
-        self.iter_num = 0
-
-    def get_lr(self) -> float:
-        lr = self.init_lr * (1 + self.gamma * self.iter_num) ** (-self.decay_rate)
-        return lr
-
-    def step(self):
-        """Increase iteration number `i` by 1 and update learning rate in `optimizer`"""
-        lr = self.get_lr()
-        for param_group in self.optimizer.param_groups:
-            if 'lr_mult' not in param_group:
-                param_group['lr_mult'] = 1.
-            param_group['lr'] = lr * param_group['lr_mult']
-
-        self.iter_num += 1
-
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/model.py#L89
-class GradientReverseFunction(Function):
-
-    @staticmethod
-    def forward(ctx, input: torch.Tensor, coeff = 1.) -> torch.Tensor:
-        ctx.coeff = coeff
-        output = input * 1.0
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):
-        return grad_output.neg() * ctx.coeff, None        
-        
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/model.py#L110
-class WarmStartGradientReverseLayer(nn.Module):
-
-    def __init__(self, alpha = 1.0, lo = 0.0, hi = 1.,
-                 max_iters = 1000., auto_step = False):
-        super(WarmStartGradientReverseLayer, self).__init__()
-        self.alpha = alpha
-        self.lo = lo
-        self.hi = hi
-        self.iter_num = 0
-        self.max_iters = max_iters
-        self.auto_step = auto_step
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        """"""
-        coeff = np.float(
-            2.0 * (self.hi - self.lo) / (1.0 + np.exp(-self.alpha * self.iter_num / self.max_iters))
-            - (self.hi - self.lo) + self.lo
-        )
-        if self.auto_step:
-            self.step()
-        return GradientReverseFunction.apply(input, coeff)
-
-    def step(self):
-        """Increase iteration number :math:`i` by 1"""
-        self.iter_num += 1
-
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/model.py#L137
-def binary_accuracy(output: torch.Tensor, target: torch.Tensor) -> float:
-    """Computes the accuracy for binary classification"""
-    with torch.no_grad():
-        batch_size = target.size(0)
-        pred = (output >= 0.5).float().t().view(-1)
-        correct = pred.eq(target.view(-1)).float().sum()
-        correct.mul_(100. / batch_size)
-        return correct        
-
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/master/new/model.py#L147
-class DomainAdversarialLoss(nn.Module):
-
-    def __init__(self, domain_discriminator: nn.Module, reduction = 'mean'):
-        super(DomainAdversarialLoss, self).__init__()
-        self.grl = WarmStartGradientReverseLayer(alpha=1., lo=0., hi=1., max_iters=1000, auto_step=True)
-        self.domain_discriminator = domain_discriminator
-        self.bce = nn.BCELoss(reduction=reduction)
-        self.domain_discriminator_accuracy = None
-
-    def forward(self, f_s: torch.Tensor, f_t: torch.Tensor, w_s, w_t) -> torch.Tensor:
-        f = self.grl(torch.cat((f_s, f_t), dim=0))
-        d = self.domain_discriminator(f)
-        d_s, d_t = d.chunk(2, dim=0)
-        d_label_s = torch.ones((f_s.size(0), 1)).to(f_s.device)
-        d_label_t = torch.zeros((f_t.size(0), 1)).to(f_t.device)
-        self.domain_discriminator_accuracy = 0.5 * (binary_accuracy(d_s, d_label_s) + binary_accuracy(d_t, d_label_t))
-        source_loss = torch.mean(w_s * self.bce(d_s, d_label_s).view(-1))
-        target_loss = torch.mean(w_t * self.bce(d_t, d_label_t).view(-1))
-        return 0.5 * (source_loss + target_loss)
-
-def train_ensemble(steps_per_epoch, iter, classifier, ensemble, optimizer, scheduler, epoch, index=0):
-    # CE-loss
-    criterion = nn.CrossEntropyLoss().cuda()
-
-    classifier.eval()
-    ensemble.train()
-
-    for ensemble_step in tqdm(range(steps_per_epoch // 2), desc=f'Ensemble {index} at epoch {epoch} '):
-        optimizer.zero_grad()
-        scheduler.step()
-
-        im, label = next(iter)
-        im = im.cuda()
-        label = label.cuda()
-
-        with torch.no_grad():
-            classifier_prediction, f = classifier(im)
-        prediction = ensemble(f.detach(), index)
-
-        loss = criterion(prediction, label)
-
-        # backward
-        loss.backward()
-        optimizer.step()
-
-# https://github.com/thuml/Calibrated-Multiple-Uncertainties/blob/415fbe2fa3a6cb8ef858d991182ccd9ca1ed8960/new/main.py#L306
-def evaluate_source_common(classifier, dataloader, ensemble, source_classes, threshold):
-    temperature = 1
-    classifier.eval()
-    ensemble.eval()
-
-    common = []
-    target_private = []
-    all_confidence = list()
-    all_consistency = list()
-    all_entropy = list()
-    all_labels = list()
-    all_output = list()
-
-    source_weight = torch.zeros(len(source_classes)).cuda()
-    count = 0
-    with torch.no_grad():
-        for i, (im, label) in enumerate(dataloader):
-            im = im.cuda()
-
-            classifier_prediction, f = classifier(im)
-            classifier_prediction = F.softmax(classifier_prediction, -1) / temperature
-            ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5 = ensemble(f)
-
-            confidence = get_confidence(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
-            entropy = get_entropy(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
-            consistency = get_consistency(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
-
-            all_confidence.extend(confidence)
-            all_consistency.extend(consistency)
-            all_entropy.extend(entropy)
-
-            for prediction in classifier_prediction:
-                all_output.append(prediction)
-
-    all_confidence = norm(torch.tensor(all_confidence))
-    all_consistency = norm(torch.tensor(all_consistency))
-    all_entropy = norm(torch.tensor(all_entropy))
-
-    all_score = (all_confidence + 1 - all_consistency + 1 - all_entropy) / 3
-
-    for i in range(len(all_score)):
-        if all_score[i] >= threshold:
-            source_weight += all_output[i]
-            count +=1
-
-    source_weight = norm(source_weight / count)
-    return source_weight
-
-def train(steps_per_epoch, source_iter, target_iter, classifier, domain_discriminator, ensemble, optimizer, 
-            lr_scheduler, epoch, source_class_weight):
-    
-    # CE-loss
-    criterion = nn.CrossEntropyLoss().cuda() 
-    # define loss function
-    domain_adv = DomainAdversarialLoss(domain_discriminator, reduction='none').cuda()
-
-    domain_adv.train()
-
-    classifier.train()
-    
-    # domain_discriminator.train()
-    ensemble.eval()
-
-    for current_step in tqdm(range(steps_per_epoch), desc=f'Train Epoch {epoch}'):
-        lr_scheduler.step()
-        optimizer.zero_grad()
-
-        # soruce domain
-        im_source, label_source = next(source_iter)
-        im_source = im_source.cuda()
-        label_source = label_source.cuda()
-        
-        # classifier_prediction_source  : (batch, num_source_class)
-        # f_source                      : (btach, 256)
-        classifier_prediction_source, f_source = classifier(im_source)
-        # classification loss
-        classification_loss = criterion(classifier_prediction_source, label_source)
-
-        # target domain
-        im_target, _ = next(target_iter)
-        im_target = im_target.cuda()
-        
-        # f_target : (btach, 256)
-        classifier_prediction_target, f_target = classifier(im_target)
-
-        with torch.no_grad():
-            target_prediction1, target_prediction2, target_prediction3, target_prediction4, target_prediction5 = ensemble(f_target)
-            confidence = get_confidence(target_prediction1, target_prediction2, target_prediction3, target_prediction4, target_prediction5)
-            entropy = get_entropy(target_prediction1, target_prediction2, target_prediction3, target_prediction4, target_prediction5)
-            consistency = get_consistency(target_prediction1, target_prediction2, target_prediction3, target_prediction4, target_prediction5)
-            # shape : (batch, )
-            w_t = (1 - entropy + 1 - consistency + confidence) / 3
-            # shape : (batch, )
-            w_s = torch.tensor([source_class_weight[i] for i in label_source]).cuda()
-
-
-        transfer_loss = domain_adv(f_source, f_target, w_s.detach(), w_t.cuda().detach())
-        
-        # total loss
-        loss = classification_loss + transfer_loss
-
-        # backward
-        loss.backward()
-        optimizer.step()
-
-    return loss
-
-def test(dataloader, classifier, ensemble, source_classes, unknown_class, threshold):
+def test(dataloader, model, unknown_class, threshold):
+    logger.info(f'Test with threshold {threshold}')
     metric = HScore(unknown_class)
 
-    classifier.eval()
-    ensemble.eval()
+    model.eval()
    
-    all_confidence = list()
-    all_consistency = list()
-    all_entropy = list()
-    all_indices = list()
-    all_labels = list()
-
     with torch.no_grad():
-        for i, (im, label) in enumerate(dataloader):
+        for i, (im, labels) in enumerate(dataloader):
             im = im.cuda()
-            label = label.cuda()
+            labels = labels.cuda()
 
-            classifier_prediction, f = classifier(im)
-            values, indices = torch.max(F.softmax(classifier_prediction, -1), 1)
-            ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5 = ensemble(f)
+            feature = model.feature_extractor(im)
+            feature, __, fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5, predict_prob = model.classifier(feature)
 
-            confidence = get_confidence(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
-            entropy = get_entropy(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
-            consistency = get_consistency(ensemble_prediction1, ensemble_prediction2, ensemble_prediction3, ensemble_prediction4, ensemble_prediction5)
+            entropy = get_entropy(fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5).detach()
+            consistency = get_consistency(fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5).detach()
+            # confidence, indices = torch.max(predict_prob, dim=1)
+            confidence = get_confidence(fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5).detach()
 
-            all_confidence.extend(confidence)
-            all_consistency.extend(consistency)
-            all_entropy.extend(entropy)
-            all_indices.extend(indices)
-            all_labels.extend(label)
+            entropy = norm(torch.tensor(entropy))
+            consistency = norm(torch.tensor(consistency))
+            confidence = norm(torch.tensor(confidence))
 
-    all_confidence = norm(torch.tensor(all_confidence))
-    all_consistency = norm(torch.tensor(all_consistency))
-    all_entropy = norm(torch.tensor(all_entropy))
-    all_score = (all_confidence + 1 - all_consistency + 1 - all_entropy) / 3
+            # TODO : re?
+            weight = (1 - entropy + 1 - consistency + confidence) / 3
+            # weight = (entropy + consistency) / 2
+            # threshold = torch.mean(weight).cuda()
 
-    for (each_indice, each_label, score) in zip(all_indices, all_labels, all_score):
-            if score < threshold:
-                prediction = unknown_class
-            else:
-                prediction = each_indice
+            # shape : (batch, )
+            predictions = predict_prob.argmax(dim=-1)
+
+            predictions[weight <= threshold] = unknown_class
             
-            predictions = torch.tensor([[prediction]])
-            labels = torch.tensor([[each_label]])
-
             metric.add_batch(predictions=predictions, references=labels)
     
     results = metric.compute()
@@ -393,6 +150,7 @@ def test(dataloader, classifier, ensemble, source_classes, unknown_class, thresh
 
     
 def main(args, save_config):
+    seed_everything(args.seed)
     
     ## GPU SETTINGS ##
     # gpu_ids = select_GPUs(args.misc.gpus)
@@ -402,7 +160,7 @@ def main(args, save_config):
     ## GPU SETTINGS ##
 
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/cmu/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/cmu/{args.seed}/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
@@ -449,21 +207,22 @@ def main(args, save_config):
     ## TEST ONLY ##
 
     # =================== optimizer    
-    optimizer = optim.SGD(model.classifier.get_parameters() + model.domain_discriminator.get_parameters(), args.train.lr,
-        momentum=args.train.momentum, weight_decay=args.train.weight_decay, nesterov=True)
-    lr_scheduler = StepwiseLR(optimizer, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-
-    optimizer_ensemble = optim.SGD(model.ensemble.get_parameters() + model.classifier.get_parameters(), args.train.lr, 
-        momentum=args.train.momentum, weight_decay=args.train.weight_decay, nesterov=True)
-
-    lr_scheduler1 = StepwiseLR(optimizer_ensemble, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-    lr_scheduler2 = StepwiseLR(optimizer_ensemble, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-    lr_scheduler3 = StepwiseLR(optimizer_ensemble, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-    lr_scheduler4 = StepwiseLR(optimizer_ensemble, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-    lr_scheduler5 = StepwiseLR(optimizer_ensemble, init_lr=args.train.lr, gamma=0.001, decay_rate=0.75)
-
-    optimizer_pre = optim.SGD(model.ensemble.get_parameters() + model.classifier.get_parameters(), args.train.lr, 
-        momentum=args.train.momentum, weight_decay=args.train.weight_decay, nesterov=True)
+    scheduler = lambda step, initial_lr: inverseDecaySheduler(step, initial_lr, gamma=10, power=0.75, max_iter=10000)
+    optimizer_finetune = OptimWithSheduler(
+        optim.SGD(model.feature_extractor.parameters(), lr=args.train.lr / 10.0, weight_decay=args.train.weight_decay,
+                momentum=args.train.momentum, nesterov=True), scheduler)
+    optimizer_cls = OptimWithSheduler(
+        optim.SGD(model.classifier.bottleneck.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay,
+                momentum=args.train.momentum, nesterov=True), scheduler)
+    fc_para = [{"params": model.classifier.fc.parameters()}, {"params": model.classifier.fc2.parameters()},
+            {"params": model.classifier.fc3.parameters()}, {"params": model.classifier.fc4.parameters()},
+            {"params": model.classifier.fc5.parameters()}]
+    optimizer_fc = OptimWithSheduler(
+        optim.SGD(fc_para, lr=args.train.lr * 5, weight_decay=args.train.weight_decay,
+                momentum=args.train.momentum, nesterov=True), scheduler)
+    optimizer_discriminator = OptimWithSheduler(
+        optim.SGD(model.discriminator.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay,
+                momentum=args.train.momentum, nesterov=True), scheduler)    
     # =================== optimizer
 
 
@@ -491,65 +250,8 @@ def main(args, save_config):
     iter5 = ForeverDataIterator(dl5)
 
     # CE-loss
-    criterion = nn.CrossEntropyLoss().cuda()
-
-    # """
-    ## Start Pre-training ##
-    logger.info('Start pretraining....')
-    model.train()
-    for pretrain_step in tqdm(range(steps_per_epoch), desc='Pre-training with ensemble'):
-
-        # optimizer zero-grad
-        optimizer_pre.zero_grad()
-
-        # ensemble 1
-        im, label = next(iter1)
-        im = im.cuda()
-        label = label.cuda()  
-        # classifier_prediction : (batch, num_class)
-        # f                     : (batch, hidden_dim)
-        # ensemble_prediction   : (batch, num_class)
-        classifier_prediction, f, ensemble_prediction = model(im, index=1)
-        loss1 = criterion(ensemble_prediction, label)
-
-        # ensemble 2
-        im, label = next(iter2)
-        im = im.cuda()
-        label = label.cuda()  
-        classifier_prediction, f, ensemble_prediction = model(im, index=2)
-        loss2 = criterion(ensemble_prediction, label)
-        
-        # ensemble 3
-        im, label = next(iter3)
-        im = im.cuda()
-        label = label.cuda()  
-        classifier_prediction, f, ensemble_prediction = model(im, index=3)
-        loss3 = criterion(ensemble_prediction, label)
-        
-        # ensemble 4
-        im, label = next(iter4)
-        im = im.cuda()
-        label = label.cuda()  
-        classifier_prediction, f, ensemble_prediction = model(im, index=4)
-        loss4 = criterion(ensemble_prediction, label)
-        
-        # ensemble 5
-        im, label = next(iter5)
-        im = im.cuda()
-        label = label.cuda()  
-        classifier_prediction, f, ensemble_prediction = model(im, index=5)
-        loss5 = criterion(ensemble_prediction, label)
-
-        # total loss 
-        loss = loss1 + loss2 + loss3 + loss4 + loss5
-        # backwards
-        loss.backward()
-        optimizer_pre.step()
-
-    logger.info('Done Pretraining...')
-    ## Done Pre-training ##
-    # """
-
+    ce = nn.CrossEntropyLoss().cuda()
+    bce = nn.BCELoss().cuda()
 
     logger.info('Start main training...')
 
@@ -559,48 +261,95 @@ def main(args, save_config):
     early_stop_count = 0
 
     ## START TRAINING ##
-    for current_epoch in tqdm(range(total_epoch), desc='Train Model'):
+    for current_step in tqdm(range(args.train.min_step), desc='Train Model'):
         
         ####################
         #                  #
         #       Train      #
         #                  #
         ####################
-        # """
-        # ensemble 1
-        train_ensemble(steps_per_epoch=steps_per_epoch, iter=iter1, classifier=model.classifier, ensemble=model.ensemble, 
-            optimizer=optimizer_ensemble, scheduler=lr_scheduler1, epoch=current_epoch, index=1)
-    
-        # ensemble 2
-        train_ensemble(steps_per_epoch=steps_per_epoch, iter=iter2, classifier=model.classifier, ensemble=model.ensemble, 
-            optimizer=optimizer_ensemble, scheduler=lr_scheduler2, epoch=current_epoch, index=2)
         
-        # ensemble 3
-        train_ensemble(steps_per_epoch=steps_per_epoch, iter=iter3, classifier=model.classifier, ensemble=model.ensemble, 
-            optimizer=optimizer_ensemble, scheduler=lr_scheduler3, epoch=current_epoch, index=3)
-        
-        # ensemble 4
-        train_ensemble(steps_per_epoch=steps_per_epoch, iter=iter4, classifier=model.classifier, ensemble=model.ensemble, 
-            optimizer=optimizer_ensemble, scheduler=lr_scheduler4, epoch=current_epoch, index=4)
-        
-        # ensemble 5
-        train_ensemble(steps_per_epoch=steps_per_epoch, iter=iter5, classifier=model.classifier, ensemble=model.ensemble, 
-            optimizer=optimizer_ensemble, scheduler=lr_scheduler5, epoch=current_epoch, index=5)
-        # """
-        
-        source_class_weight = evaluate_source_common(model.classifier, target_test_dl, model.ensemble, source_classes, args.test.threshold)
+        model.train()
 
-        # train
-        loss = train(steps_per_epoch, source_iter, target_iter, model.classifier, model.domain_discriminator, model.ensemble, optimizer, 
-            lr_scheduler, current_epoch, source_class_weight)
-    
+        # load data
+        im_s, label_s = next(source_iter)
+        im1, label1 = next(iter1)
+        im2, label2 = next(iter2)
+        im3, label3 = next(iter3)
+        im4, label4 = next(iter4)
+        # im5, label5 = next(iter5)
+        im_t, label_t = next(target_iter)
+
+        # to cuda
+        im_s, label_s = im_s.cuda(), label_s.cuda()
+        im1, label1 = im1.cuda(), label1.cuda()
+        im2, label2 = im2.cuda(), label2.cuda()
+        im3, label3 = im3.cuda(), label3.cuda()
+        im4, label4 = im4.cuda(), label4.cuda()
+        # im5, label5 = im5.cuda(), label5.cuda()
+        im_t, label_t = im_t.cuda(), label_t.cuda()
+
+        # extract feature
+        fc1_s = model.feature_extractor.forward(im_s)
+        fc1_s2 = model.feature_extractor.forward(im1)
+        fc1_s3 = model.feature_extractor.forward(im2)
+        fc1_s4 = model.feature_extractor.forward(im3)
+        fc1_s5 = model.feature_extractor.forward(im4)
+        fc1_t = model.feature_extractor.forward(im_t)
+
+        fc1_s, feature_source, fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5, predict_prob_source = model.classifier.forward(fc1_s)
+        fc1_s2, feature_source2, fc2_s_2, fc2_s2_2, fc2_s3_2, fc2_s4_2, fc2_s5_2, predict_prob_source2 = \
+            model.classifier.forward(fc1_s2)
+        fc1_s3, feature_source3, fc2_s_3, fc2_s2_3, fc2_s3_3, fc2_s4_3, fc2_s5_3, predict_prob_source3 = \
+            model.classifier.forward(fc1_s3)
+        fc1_s4, feature_source4, fc2_s_4, fc2_s2_4, fc2_s3_4, fc2_s4_4, fc2_s5_4, predict_prob_source4 = \
+            model.classifier.forward(fc1_s4)
+        fc1_s5, feature_source5, fc2_s_5, fc2_s2_5, fc2_s3_5, fc2_s4_5, fc2_s5_5, predict_prob_source5 = \
+            model.classifier.forward(fc1_s5)
+        fc1_t, feature_target, fc2_t, fc2_t2, fc2_t3, fc2_t4, fc2_t5, predict_prob_target = model.classifier.forward(fc1_t)
+
+
+        domain_prob_discriminator_source = model.discriminator.forward(feature_source)
+        domain_prob_discriminator_target = model.discriminator.forward(feature_target)
+
+        # entropy = get_entropy(fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5).detach()
+        # consistency = get_consistency(fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5).detach()
+        # confidence, indices = torch.max(predict_prob_target, dim=1)
+
+        # adv loss
+        source_adv_loss = bce(domain_prob_discriminator_source, torch.ones_like(domain_prob_discriminator_source))
+        target_adv_loss = bce(domain_prob_discriminator_target, torch.zeros_like(domain_prob_discriminator_target))
+
+        # classificaiton loss
+        # ce_loss1 = ce(fc2_s, label1)
+        # ce_loss2 = ce(fc2_s2_2, label2)
+        # ce_loss3 = ce(fc2_s3_3, label3)
+        # ce_loss4 = ce(fc2_s4_4, label4)
+        # ce_loss5 = ce(fc2_s5_5, label5)
+        
+        ce_loss1 = ce(fc2_s, label_s)
+        ce_loss2 = ce(fc2_s2_2, label1)
+        ce_loss3 = ce(fc2_s3_3, label2)
+        ce_loss4 = ce(fc2_s4_4, label3)
+        ce_loss5 = ce(fc2_s5_5, label4)
+        ce_loss = (ce_loss1 + ce_loss2 + ce_loss3 + ce_loss4 + ce_loss5) / 5
+
+        loss = ce_loss + source_adv_loss + target_adv_loss
+
+        # backward()
+        with OptimizerManager(
+                [optimizer_finetune, optimizer_cls, optimizer_fc, optimizer_discriminator]):
+            loss.backward()
+
         ####################
         #                  #
         #     Logging      #
         #                  #
         ####################
-        writer.add_scalar('train/loss', loss, current_epoch)
-
+        writer.add_scalar('train/loss', loss, current_step)
+        writer.add_scalar('train/source_adv_loss', source_adv_loss, current_step)
+        writer.add_scalar('train/target_adv_loss', target_adv_loss, current_step)
+        writer.add_scalar('train/ce_loss', ce_loss, current_step)
 
         ####################
         #                  #
@@ -608,44 +357,45 @@ def main(args, save_config):
         #                  #
         ####################
 
-        logger.info(f'TEST at epoch {current_epoch} ...')
-        results = test(target_test_dl, model.classifier, model.ensemble, source_classes, unknown_class, args.test.threshold)
-        writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], current_epoch)
-        writer.add_scalar('test/total_acc_test', results['total_accuracy'], current_epoch)
-        writer.add_scalar('test/known_test', results['known_accuracy'], current_epoch)
-        writer.add_scalar('test/unknown_test', results['unknown_accuracy'], current_epoch)
-        writer.add_scalar('test/hscore_test', results['h_score'], current_epoch)
+        if current_step % test_interval == 0:
+            logger.info(f'TEST at epoch {current_epoch} ...')
+            results = test(target_test_dl, model, unknown_class, args.test.threshold)
+            writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], current_epoch)
+            writer.add_scalar('test/total_acc_test', results['total_accuracy'], current_epoch)
+            writer.add_scalar('test/known_test', results['known_accuracy'], current_epoch)
+            writer.add_scalar('test/unknown_test', results['unknown_accuracy'], current_epoch)
+            writer.add_scalar('test/hscore_test', results['h_score'], current_epoch)
 
+            if results['mean_accuracy'] > best_acc:
+                best_acc = results['mean_accuracy']
+                best_results = results
+                early_stop_count = 0
 
-        if results['mean_accuracy'] > best_acc:
-            best_acc = results['mean_accuracy']
-            best_results = results
-            early_stop_count = 0
+                print_dict(logger, string=f'* Best Result at epoch {current_epoch}', dict=results)
 
-            print_dict(logger, string=f'* Best accuracy at epoch {current_epoch}', dict=results)
+                logger.info('Saving best model...')
+                torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
+                logger.info('Done saving...')
+            else:
+                print_dict(logger, string=f'* Current accuracy at epoch {current_epoch}', dict=results)
 
-            logger.info('Saving best model...')
-            torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
-            logger.info('Done saving...')
-        else:
-            print_dict(logger, string=f'* Current accuracy at epoch {current_epoch}', dict=results)
+                logger.info('Saving current model...')
+                torch.save(model.state_dict(), os.path.join(log_dir, 'current.pth'))
+                logger.info('Done saving...')
 
-            logger.info('Saving current model...')
-            torch.save(model.state_dict(), os.path.join(log_dir, 'current.pth'))
-            logger.info('Done saving...')
+                if early_stop_count == args.train.early_stop:
+                    logger.info('End.')
+                    end_time = time.time()
+                    logger.info(f'Done training at epoch {current_epoch}. Total time : {end_time-start_time}')     
 
-            if early_stop_count == args.train.early_stop:
-                logger.info('End.')
-                end_time = time.time()
-                logger.info(f'Done training at epoch {current_epoch}. Total time : {end_time-start_time}')     
+                    print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
 
-                print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
+                    exit()
+                early_stop_count += 1
+                logger.info(f'Early stopping : {early_stop_count} / {args.train.early_stop}')
 
-                exit()
-            early_stop_count += 1
-            logger.info(f'Early stopping : {early_stop_count} / {args.train.early_stop}')
+            current_epoch += 1
 
-    
     print_dict(logger, string=f'** BEST RESULTS', dict=best_results)
     end_time = time.time()
     logger.info(f'Done training full step. Total time : {end_time-start_time}')
