@@ -65,8 +65,8 @@ class UAN(nn.Module):
         self.hidden_dim = self.model.config.hidden_size
 
         self.classifier = CLS(self.hidden_dim, self.num_class, bottle_neck_dim=256)
-        self.discriminator = AdversarialNetwork(256, self.max_train_step)
-        self.discriminator_separate = AdversarialNetwork(256, self.max_train_step)
+        self.discriminator = AdversarialNetwork(self.hidden_dim, self.max_train_step)
+        self.discriminator_separate = AdversarialNetwork(self.hidden_dim, self.max_train_step)
 
     def forward(
         self,
@@ -95,9 +95,11 @@ class UAN(nn.Module):
         cls_state, after_bottleneck, before_softmax, after_softmax = self.classifier(cls_state)
         
         # shape : (batch, 1)
-        d = self.discriminator(after_bottleneck)
+        # d = self.discriminator(after_bottleneck)
+        d = self.discriminator(before_softmax)
         # shape : (batch, 1)
-        d_0 = self.discriminator_separate(after_bottleneck)
+        # d_0 = self.discriminator_separate(after_bottleneck)
+        d_0 = self.discriminator_separate(before_softmax)
         
         # shape : (batch, )
         predictions = after_softmax.argmax(dim=-1)

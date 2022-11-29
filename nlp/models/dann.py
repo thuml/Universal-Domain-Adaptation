@@ -1,11 +1,10 @@
 
-import torch
-import torch.nn.functional as F
 from torch import nn
 from torchvision import models
 
-from easydl import *
+from transformers import AutoModel
 
+from easydl import *
 
 # from UAN code
 # classification head
@@ -26,7 +25,7 @@ class Classifier(nn.Module):
 # from UAN code
 # adversarial network
 class AdversarialNetwork(nn.Module):
-    def __init__(self, in_feature):
+    def __init__(self, in_feature, max_train_step):
         super(AdversarialNetwork, self).__init__()
         self.main = nn.Sequential(
             nn.Linear(in_feature, 1024),
@@ -38,77 +37,69 @@ class AdversarialNetwork(nn.Module):
             nn.Linear(1024, 1),
             nn.Sigmoid()
         )
-        self.grl = GradientReverseModule(lambda step: aToBSheduler(step, 0.0, 1.0, gamma=10, max_iter=10000))
+        self.grl = GradientReverseModule(lambda step: aToBSheduler(step, 0.0, 1.0, gamma=10, max_iter=max_train_step))
 
     def forward(self, x):
         x_ = self.grl(x)
         y = self.main(x_)
         return y
 
-class ResBase(nn.Module):
-    def __init__(self, option='resnet50', pret=True, top=False):
-        super(ResBase, self).__init__()
-        self.dim = 2048
-        self.top = top
-        if option == 'resnet50':
-            model_ft = models.resnet50(pretrained=pret)
-
-        mod = list(model_ft.children())
-        mod.pop()
-        self.features = nn.Sequential(*mod)
-
-
-    def forward(self, x):
-        x = self.features(x)
-        if self.top:
-            return x
-        else:
-            x = x.view(x.size(0), self.dim)
-            return x
 
 
 
 class DANN(nn.Module):
-    def __init__(self, args, source_classes, **kwargs):
+    def __init__(self, model_name, num_class, max_train_step, **kwargs):
         super(DANN, self).__init__()
         print('INIT DANN...')
-        self.num_class = len(source_classes)
-        self.unknown_class = self.num_class
-        self.hidden_dim = 2048
+        self.model_name = model_name
+        self.num_class = num_class
+        self.unk_index = num_class
 
-        self.base_model = ResBase()
-        self.classifier = Classifier(in_dim=self.hidden_dim, out_dim=self.num_class)
-        self.domain_discriminator = AdversarialNetwork(in_feature=self.hidden_dim)
+        try:
+            self.model = AutoModel.from_pretrained(self.model_name)
+        except:
+            print(f'Unable to load model {self.model_name}')
+            exit()
 
+        self.hidden_dim = self.model.config.hidden_size
+            
+        self.classifier = Classifier(in_dim=self.hidden_dim, out_dim=self.num_class, bottle_neck_dim=256)
+        self.discriminator = AdversarialNetwork(self.hidden_dim, max_train_step)
 
-    def forward(self, x):
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        position_ids=None,
+        labels=None,
+        **kwargs,
+    ):
+        
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        # shape : (batch, length, hidden_dim)
+        last_hidden_state = outputs.last_hidden_state
+
         # shape : (batch, hidden_dim)
-        feat = self.base_model(x)
+        cls_state = last_hidden_state[:, 0, :]
+
         # shape : (batch, num_class)
-        classification_output = self.classifier(feat)
+        classification_output = self.classifier(cls_state)
         # shape : (batch, 1)
-        domain_output = self.domain_discriminator(feat)
-
-        return classification_output, domain_output
-
-    def get_prediction_and_logits(self, x):
-        # shape : (batch, hidden_dim)
-        feat = self.base_model(x)
-        # shape : (batch, num_class)
-        classification_output = self.classifier(feat)
+        domain_output = self.discriminator(cls_state)
 
         # shape : (batch, )
         predictions = classification_output.argmax(dim=-1)
         # shape : (batch, )
         max_logits = classification_output.max(dim=-1).values
 
-
-        return {
+        return  {
             'predictions' : predictions,
-            'total_logits' : classification_output,
-            'max_logits' : max_logits
+            'logits' : classification_output,
+            'max_logits' : max_logits,
+            'domain_output' : domain_output,
         }
-    
-
-
-        

@@ -1,94 +1,38 @@
 
-import argparse
 import time
-import datetime
 import logging
 import copy
+import os
 
-import easydict
 import torch
-import torch.nn.functional as F
-import torch.backends.cudnn as cudnn
 import yaml
-from torch import nn
-from tqdm import tqdm
-
-from torch import optim
-from tensorboardX import SummaryWriter
+import numpy as np
+import torch.backends.cudnn as cudnn
 import pdb
+
+from torch import (
+    nn,
+    optim
+)
+from tqdm import tqdm
+from tensorboardX import SummaryWriter
+from transformers import (
+    AutoTokenizer,
+    get_scheduler,
+)
 
 from models.dann import DANN
 from utils.logging import logger_init, print_dict
-from utils.utils import seed_everything
+from utils.utils import seed_everything, parse_args
 from utils.evaluation import HScore
-from utils.data import *
-
+from utils.data import get_dataloaders, ForeverDataIterator
 cudnn.benchmark = True
 cudnn.deterministic = True
 
 
 logger = logging.getLogger(__name__)
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Code for *Universal Domain Adaptation*',
-                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
-    parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
-    parser.add_argument('--min_threshold', type=float, default=0.0, help='Minimum threshold value.')
-    parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
-    parser.add_argument('--step', type=float, default=0.005, help='Step value.')
-    parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
-
-
-    args = parser.parse_args()
-    lr = args.lr
-    min_threshold = args.min_threshold
-    max_threshold = args.max_threshold
-    step = args.step
-    seed = args.seed
-
-
-    config_file = args.config
-
-    args = yaml.load(open(config_file))
-
-    save_config = yaml.load(open(config_file))
-
-    args = easydict.EasyDict(args)
-
-    if lr is not None:
-        args.train.lr = lr
-
-    args.min_threshold = min_threshold
-    args.max_threshold = max_threshold
-    args.step = step
-    args.seed = seed
-
-    return args, save_config
-
-def test(model, dataloader, unknown_class):
-    metric = HScore(unknown_class)
-
-    model.eval()
-    with torch.no_grad():
-        for i, (im, label) in enumerate(dataloader):
-            im = im.cuda()
-            label = label.cuda()
-
-            # predictions   : (batch, )
-            # max_logits    : (batch, )
-            # total_logits  : (batch, num_source_class)
-            outputs  = model.get_prediction_and_logits(im)
-            predictions, _, _ = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
-            
-            metric.add_batch(predictions=predictions, references=label)
-    
-    results = metric.compute()
-    return results
-
-
-def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.005):
+def cheating_test(model, dataloader, unknown_class, metric_name='mean_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
 
@@ -100,16 +44,18 @@ def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.0
 
     model.eval()
     with torch.no_grad():
-        for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.cuda()
-            label = label.cuda()
+        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
 
-            # predictions   : (batch, )
-            # max_logits    : (batch, )
-            # total_logits  : (batch, num_source_class)
-            outputs  = model.get_prediction_and_logits(im)
-            predictions, total_logits, max_logits = outputs['predictions'], outputs['total_logits'], outputs['max_logits']
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
 
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            # check for best threshold
             for index in range(num_thresholds):
                 tmp_predictions = predictions.clone().detach()
                 threshold = thresholds[index]
@@ -119,261 +65,270 @@ def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.0
 
                 metrics[index].add_batch(
                     predictions=tmp_predictions,
-                    references=label
+                    references=labels
                 )
+
     best_threshold = 0
-    best_accuracy = 0
+    best_metric = 0
     best_results = None
 
     for index in range(num_thresholds):
         threshold = thresholds[index]
 
         results = metrics[index].compute()
-        current_accuracy = results['mean_accuracy'] * 100
+        current_metric = results[metric_name] * 100
 
-        if current_accuracy >= best_accuracy:
-            best_accuracy = current_accuracy
+        if current_metric >= best_metric:
+            best_metric = current_metric
             best_threshold = threshold
             best_results = results
 
-    return best_results, best_threshold
+    best_results['threshold'] = best_threshold
 
-# from original code
-# https://github.com/VisionLearningGroup/OVANet/blob/d40020d2d59e617ca693ce5195b7b5a44a9893d5/utils/lr_schedule.py#L2
-def inv_lr_scheduler(param_lr, optimizer, iter_num, gamma=10,
-                     power=0.75, init_lr=0.001,weight_decay=0.0005,
-                     max_iter=10000):
-    #10000
-    """Decay learning rate by a factor of 0.1 every lr_decay_epoch epochs."""
-    #max_iter = 10000
-    gamma = 10.0
-    lr = init_lr * (1 + gamma * min(1.0, iter_num / max_iter)) ** (-power)
-    i=0
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr * param_lr[i]
-        i+=1
-    return lr
+    return best_results
+
+def test_with_threshold(model, dataloader, unknown_class, threshold):
+    logger.info(f'Test with threshold {threshold}')
+    metric = HScore(unknown_class)
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='testing '):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            # pdb.set_trace()
+            predictions[max_logits < threshold] = unknown_class
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
+    results['threshold'] = threshold
+
+    return results
 
 def main(args, save_config):
-    seed_everything(args.seed)
-
-    ## GPU SETTINGS ##
-    # gpu_ids = select_GPUs(args.misc.gpus)
-    # TODO : remove?
-    gpu_ids = [0]
-    output_device = gpu_ids[0]
-    ## GPU SETTINGS ##
-
+    seed_everything(args.train.seed)
+    
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/dann/{args.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/fine_tuning/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
-    if not args.test.test_only:
-        writer = SummaryWriter(log_dir)
+    writer = SummaryWriter(log_dir)
     # dump configs
-    with open(join(log_dir, 'config.yaml'), 'w') as f:
+    with open(os.path.join(log_dir, 'config.yaml'), 'w') as f:
         f.write(yaml.dump(save_config))
     ## LOGGINGS ##
 
+    # count known class / unknown class
+    num_source_labels = args.dataset.num_source_class
+    num_class = num_source_labels
+    unknown_label = num_source_labels
+    logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
-    ## LOAD DATASETS ##
-    source_classes, target_classes, common_classes, source_private_classes, target_private_classes = get_class_per_split(args)
-    source_train_dl, source_test_dl, target_train_dl, target_test_dl = get_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
+    
+    ## INIT TOKENIZER ##
+    tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
-    unknown_class = len(source_classes)
-    logger.info(f'Select from {source_classes}, Unknown class {target_private_classes} -> {unknown_class}')
-    ## LOAD DATASETS ##
+    ## GET DATALOADER ##
+    train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.train.batch_size, max_length=args.train.max_length)
 
+    num_step_per_epoch = max(len(train_dataloader), len(train_unlabeled_dataloader))
+    total_step = args.train.num_train_epochs * num_step_per_epoch
+    logger.info(f'Total epoch {args.train.num_train_epochs}, steps per epoch {num_step_per_epoch}, total step {total_step}')
 
     ## INIT MODEL ##
     logger.info('Init model...')
     start_time = time.time()
-    model = DANN(args, source_classes).cuda()
+    model = DANN(
+        model_name=args.model.model_name_or_path,
+        num_class=num_class,
+        max_train_step=total_step,
+    ).cuda()
     end_time = time.time()
     loading_time = end_time - start_time
     logger.info(f'Done loading model. Total time {loading_time}')
-
-
-    # model = nn.DataParallel(model, device_ids=gpu_ids, output_device=output_device)
+    num_total_params = sum(p.numel() for p in model.parameters())
+    logger.info(f'Total number of trained parameters : {num_total_params}')
     ## INIT MODEL ##
 
 
-    ## TEST ONLY ##
-    if args.test.test_only:
-        logger.info('TEST ONLY...')
-        state_dict_path = os.path.join(log_dir, 'best.pth')
-        assert os.path.exists(state_dict_path)
-        model.load_state_dict(torch.load(state_dict_path))
-        results = test(model, target_test_dl, unknown_class)
+    ## OPTIMIZER & SCHEDULER ##
+    optimizer = optim.AdamW(model.parameters(), lr=args.train.lr)
 
-        print_dict(logger, string='======== Final Test Results ========', dict=results)
-        exit(0)
-    ## TEST ONLY ##
+    num_warmup_steps = int(total_step * 0.3)
+    lr_scheduler = get_scheduler(
+        name=args.train.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=total_step
+    )
+    ## OPTIMIZER & SCHEDULER ##
+    
+    
+    global_step = 0
+    best_acc = 0
+    best_results = None
+    early_stop_count = 0
 
-    # =================== optimizer    
-    scheduler = lambda step, initial_lr: inverseDecaySheduler(step, initial_lr, gamma=10, power=0.75, max_iter=10000)
-    optimizer_base = OptimWithSheduler(
-        optim.SGD(model.base_model.parameters(), lr=args.train.lr / 10.0, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
-        scheduler)
-    optimizer_cls = OptimWithSheduler(
-        optim.SGD(list(model.classifier.parameters()) + list(model.domain_discriminator.parameters()), lr=args.train.lr, weight_decay=args.train.weight_decay, momentum=args.train.momentum, nesterov=True),
-        scheduler)
-
-    # total steps / epochs
-    steps_per_epoch = max(len(source_train_dl), len(target_train_dl))
-    total_epoch = round(args.train.min_step / steps_per_epoch)
-    logger.info(f'Total epoch {total_epoch}, steps per epoch {steps_per_epoch}, total step {args.train.min_step}')
-
-    # log every epoch
-    log_interval = steps_per_epoch
-    # test every epoh
-    test_interval = steps_per_epoch
-
-    logger.info(f'Start Training....')
-    start_time = time.time()
-
-    source_iter = ForeverDataIterator(source_train_dl)
-    target_iter = ForeverDataIterator(source_train_dl)
+    # data iter
+    source_iter = ForeverDataIterator(train_dataloader)
+    target_iter = ForeverDataIterator(train_unlabeled_dataloader)
 
     # CE-loss for classification
     ce = nn.CrossEntropyLoss().cuda()
     # BCE-loss for domain classification
     bce = nn.BCELoss().cuda()
     
-    current_epoch = 0
-    best_acc = 0
-    best_threshold = 0
-    best_results = None
-    early_stop_count = 0
-
     ## START TRAINING ##
-    for global_step in tqdm(range(args.train.min_step), desc='Train Model'):
-        global_step += 1
-        
-        model.train()
+    if args.train.train:
+        logger.info(f'Start Training....')
+        start_time = time.time()
+        for current_epoch in range(1, args.train.num_train_epochs+1):
+            model.train()
 
-        ####################
-        #                  #
-        #   Forward Pass   #
-        #                  #
-        ####################
+            # check early stop.
+            if early_stop_count == args.train.early_stop:
+                logger.info('Early stop. End.')
+                break
 
-        # get samples
-        im_source, label_source = next(source_iter)
-        im_target, _  = next(target_iter)
 
-        # to cuda
-        label_source = label_source.cuda()
-        im_source = im_source.cuda()
-        im_target = im_target.cuda()
+            for current_step in tqdm(range(num_step_per_epoch), desc=f'TRAIN EPOCH {current_epoch}'):
 
-        # optimizer zero grad
-        optimizer_base.zero_grad()
-        optimizer_cls.zero_grad()
-
-        ## adversarial training : source = 1, target = 0
-
-        ## source
-        # classification_s  : (batch, num_source_class)
-        # domain_s          : (batch, 1)
-        classification_s, domain_s = model(im_source)
-
-        ## target
-        # domain_t          : (batch, 1)
-        _, domain_t = model(im_target)
-
+                global_step += 1
                 
-        ####################
-        #                  #
-        #   Compute Loss   #
-        #                  #
-        ####################
+                # optimizer zero-grad
+                optimizer.zero_grad()
 
-        # source bce loss
-        bce_loss_s = bce(domain_s, torch.ones_like(domain_s))
-        # source ce loss
-        ce_loss_s = ce(classification_s, label_source)
-        
-        # target bce_loss
-        bce_loss_t = bce(domain_t, torch.zeros_like(domain_t))
+                ####################
+                #                  #
+                #     Load Data    #
+                #                  #
+                ####################
 
-        # total loss
-        loss = ce_loss_s + bce_loss_s + bce_loss_t
+                ## source to cuda
+                source_batch = next(source_iter)
+                source_batch = {k: v.cuda() for k, v in source_batch.items()}
+                source_labels = source_batch['labels']
 
-        # backward + step
-        loss.backward()
-        optimizer_base.step()
-        optimizer_cls.step()
+                ## target to cuda
+                target_batch = next(target_iter)
+                target_batch = {k: v.cuda() for k, v in target_batch.items()}
 
+                ####################
+                #                  #
+                #   Forward Pass   #
+                #                  #
+                ####################
 
-        ####################
-        #                  #
-        #     Logging      #
-        #                  #
-        ####################
+                source_outputs = model(**source_batch)
+                source_logits = source_outputs['logits']
+                source_domain_output = source_outputs['domain_output']
 
-        if global_step % log_interval == 0:
-            writer.add_scalar('train/ce_loss', ce_loss_s, current_epoch)
-            writer.add_scalar('train/adv_loss_source', bce_loss_s, current_epoch)
-            writer.add_scalar('train/adv_loss_target', bce_loss_t, current_epoch)
-            writer.add_scalar('train/loss', loss, current_epoch)
+                target_outputs = model(**target_batch)
+                target_domain_output = target_outputs['domain_output']
 
+                ####################
+                #                  #
+                #   Compute Loss   #
+                #                  #
+                ####################
 
-        ####################
-        #                  #
-        #       Test       #
-        #                  #
-        ####################
-        
-        if global_step % test_interval == 0:
-            current_epoch += 1
-            logger.info(f'TEST at epoch {current_epoch} ...')
-            results, threshold = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold, step=args.step)    
-            writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
-            writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
-            writer.add_scalar('test/known_test', results['known_accuracy'], global_step)
-            writer.add_scalar('test/unknown_test', results['unknown_accuracy'], global_step)
-            writer.add_scalar('test/hscore_test', results['h_score'], global_step)
-            writer.add_scalar('test/threshold', threshold, global_step)
+                source_adv_loss = bce(source_domain_output, torch.ones_like(source_domain_output))
+                target_adv_loss = bce(target_domain_output, torch.zeros_like(target_domain_output))
+                adv_loss = source_adv_loss + target_adv_loss
 
+                ce_loss = ce(source_logits, source_labels)
+
+                # total loss
+                loss = ce_loss + target_adv_loss    
+
+                # write to tensorboard
+                writer.add_scalar('train/loss', loss, global_step)
+                writer.add_scalar('train/ce_loss', ce_loss, global_step)
+                writer.add_scalar('train/adv_loss', adv_loss, global_step)
+                
+                # backward, optimization
+                loss.backward()
+                optimizer.step()
+                lr_scheduler.step()
+
+            ####################
+            #                  #
+            #     Evaluate     #
+            #                  #
+            ####################
+            
+            logger.info(f'Evaluate model at epoch {current_epoch} ...')
+
+            # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
+            results = cheating_test(model, eval_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+            # write to tensorboard
+            for k,v in results.items():
+                writer.add_scalar(f'eval/{k}', v, global_step)
+            
 
             if results['mean_accuracy'] > best_acc:
                 best_acc = results['mean_accuracy']
                 best_results = results
-                best_threshold = threshold
                 early_stop_count = 0
 
-                results['threshold'] = threshold
-                print_dict(logger, string=f'* BEST accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
+                print_dict(logger, string=f'\n* BEST MEAN ACCURACY at epoch {current_epoch}', dict=results)
 
                 logger.info('Saving best model...')
                 torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
                 logger.info('Done saving...')
             else:
-                print_dict(logger, string=f'* Current accuracy at epoch {current_epoch} with threshold {best_threshold}', dict=results)
+                logger.info('\nNot best. Pass.')
 
-                logger.info('Saving current model...')
-                torch.save(model.state_dict(), os.path.join(log_dir, 'current.pth'))
-                logger.info('Done saving...')
-
-                if early_stop_count == args.train.early_stop:
-                    logger.info('End.')
-                    end_time = time.time()
-                    logger.info(f'Done training at epoch {current_epoch}. Total time : {end_time-start_time}')     
-
-                    print_dict(logger, string=f'** BEST RESULTS with threshold {best_threshold}', dict=best_results)
-
-                    exit()
                 early_stop_count += 1
                 logger.info(f'Early stopping : {early_stop_count} / {args.train.early_stop}')
+        
+        end_time = time.time()
+        logger.info(f'Done training full step. Total time : {end_time-start_time}')
 
+        # skip evaluation with low accuracy
+        if best_results['mean_accuracy'] < 80:
+            logger.info(f'Low mean accuracy {best_results["mean_accuracy"]}. Skip testing.')
+            exit() 
+
+    else:
+        logger.info('Skip training... ')
     
-    print_dict(logger, string=f'** BEST RESULTS with threshold {best_threshold}', dict=best_results)
-    end_time = time.time()
-    logger.info(f'Done training full step. Total time : {end_time-start_time}')
+    ####################
+    #                  #
+    #       Test       #
+    #                  #
+    ####################
+
+    logger.info('Loading best model ...')
+    model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
+            
+    logger.info('Test model...')
+    best_threshold = best_results['threshold'] if best_results is not None else args.test.threshold
+    results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
+    for k,v in results.items():
+        writer.add_scalar(f'test/{k}', v, 0)
+
+    print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+
+    # Find optimal threshold from test set (Cheating)
+    # find model with the best h-score
+    results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+    # write to tensorboard
+    for k,v in results.items():
+        writer.add_scalar(f'test/{k}', v, 1)
+    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT', dict=results)
 
 
+    logger.info('Done.')
 
 if __name__ == "__main__":
         

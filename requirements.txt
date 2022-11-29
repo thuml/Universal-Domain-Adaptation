@@ -2,3 +2,6 @@ easydict
 easydl
 tensorboardX
 tqdm
+transformers==4.20.1
+datasets
+yaml==5.4.1

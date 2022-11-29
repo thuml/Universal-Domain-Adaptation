@@ -2,59 +2,12 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torchvision import models
+
+from transformers import AutoModel
 
 from easydl import *
 
 
-class CLS(nn.Module):
-    """
-    a two-layer MLP for classification
-    """
-    def __init__(self, in_dim, out_dim, bottle_neck_dim=256):
-        super(CLS, self).__init__()
-        self.bottleneck = nn.Linear(in_dim, bottle_neck_dim)
-        self.fc = nn.Linear(bottle_neck_dim, out_dim)
-        self.main = nn.Sequential(self.bottleneck, self.fc, nn.Softmax(dim=-1))
-
-    def forward(self, x):
-        out = [x]
-        for module in self.main.children():
-            x = module(x)
-            out.append(x)
-        return out
-
-
-class ResBase(nn.Module):
-    def __init__(self, option='resnet50', pret=True, top=False):
-        super(ResBase, self).__init__()
-        self.dim = 2048
-        self.top = top
-        # if option == 'resnet18':
-        #     model_ft = models.resnet18(pretrained=pret)
-        #     self.dim = 512
-        # if option == 'resnet34':
-        #     model_ft = models.resnet34(pretrained=pret)
-        #     self.dim = 512
-        if option == 'resnet50':
-            model_ft = models.resnet50(pretrained=pret)
-        # if option == 'resnet101':
-        #     model_ft = models.resnet101(pretrained=pret)
-        # if option == 'resnet152':
-        #     model_ft = models.resnet152(pretrained=pret)
-
-        mod = list(model_ft.children())
-        mod.pop()
-        self.features = nn.Sequential(*mod)
-
-
-    def forward(self, x):
-        x = self.features(x)
-        if self.top:
-            return x
-        else:
-            x = x.view(x.size(0), self.dim)
-            return x
 
 class ResClassifier_MME(nn.Module):
     def __init__(self, num_classes=12, input_size=2048, temp=0.05, norm=True):
@@ -88,24 +41,53 @@ class ResClassifier_MME(nn.Module):
 
 
 class OVANET(nn.Module):
-    def __init__(self, args, source_classes, **kwargs):
+    def __init__(self, model_name, num_class, **kwargs):
         super(OVANET, self).__init__()
         print('INIT OVANET...')
-        self.num_class = len(source_classes)
-        self.unknown_class = self.num_class
-        self.hidden_dim = 2048
+        
+        self.model_name = model_name
+        self.num_class = num_class
+        self.unk_index = num_class
 
-        self.G = ResBase()
+        try:
+            self.model = AutoModel.from_pretrained(self.model_name)
+        except:
+            print(f'Unable to load model {self.model_name}')
+            exit()
+
+        self.hidden_dim = self.model.config.hidden_size
+
         self.C2 = ResClassifier_MME(num_classes=2 * self.num_class,
                            norm=False, input_size=self.hidden_dim)
         self.C1 = ResClassifier_MME(num_classes=self.num_class,
                            norm=False, input_size=self.hidden_dim)
 
 
-    def forward(self, x):
-        feat = self.G(x)
-        out_s = self.C1(feat)
-        out_open = self.C2(feat)
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        position_ids=None,
+        labels=None,
+        **kwargs,
+    ):
+
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        # shape : (batch, length, hidden_dim)
+        last_hidden_state = outputs.last_hidden_state
+
+        # shape : (batch, hidden_dim)
+        cls_state = last_hidden_state[:, 0, :]
+        
+        out_s = self.C1(cls_state)
+        out_open = self.C2(cls_state)
+
+        predictions = out_s.argmax(dim=-1)
 
         return out_s, out_open
     
