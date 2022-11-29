@@ -96,10 +96,10 @@ class UAN(nn.Module):
         
         # shape : (batch, 1)
         # d = self.discriminator(after_bottleneck)
-        d = self.discriminator(before_softmax)
+        d = self.discriminator(cls_state)
         # shape : (batch, 1)
         # d_0 = self.discriminator_separate(after_bottleneck)
-        d_0 = self.discriminator_separate(before_softmax)
+        d_0 = self.discriminator_separate(cls_state)
         
         # shape : (batch, )
         predictions = after_softmax.argmax(dim=-1)
