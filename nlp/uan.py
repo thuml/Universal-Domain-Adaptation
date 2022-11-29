@@ -251,7 +251,7 @@ def main(args, save_config):
                 # d_0 : discriminator_separate
                 target_logits, target_before_softmax, target_d, target_d_0 = target_outputs['logits'], target_outputs['before_softmax'], target_outputs['d'], target_outputs['d_0']
 
-                 # shape : (batch, 1)
+                # shape : (batch, 1)
                 target_share_weight = model.get_target_share_weight(target_d_0, target_before_softmax, domain_temperature=1.0, class_temperature=1.0)
                 target_share_weight = model.normalize_weight(target_share_weight)
 

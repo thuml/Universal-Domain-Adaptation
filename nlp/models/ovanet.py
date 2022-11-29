@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+import numpy as np
 from transformers import AutoModel
 
 from easydl import *
@@ -84,48 +85,32 @@ class OVANET(nn.Module):
         # shape : (batch, hidden_dim)
         cls_state = last_hidden_state[:, 0, :]
         
-        out_s = self.C1(cls_state)
+        # shape : (batch, num_source_class)
+        out = self.C1(cls_state)
+        # shape : (batch, num_source_class * 2)
         out_open = self.C2(cls_state)
 
-        predictions = out_s.argmax(dim=-1)
+        predictions = out.argmax(dim=-1)
 
-        return out_s, out_open
-    
-
-    def get_prediction_and_logits(self, x):
-        # y : (batch, num_source_class)
-        # y = self.forward(x)
-
-        feat = self.G(x)
-        # shape : (batch, num_source_class)
-        out_t = self.C1(feat)
-
-        # shape : (batch, )
-        predictions = out_t.argmax(dim=-1)
-
-        # shape : (batch, num_source_class * 2)
-        out_open = self.C2(feat)
         # shape : (batch, 2, num_source_class)
-        out_open = F.softmax(out_open.view(out_t.size(0), 2, -1), 1)
+        out_open_reshaped = F.softmax(out_open.view(out.size(0), 2, -1), 1)
 
         # shape : (batch, )
-        tmp_range = torch.range(0, out_t.size(0)-1).long().cuda()
+        tmp_range = torch.range(0, out.size(0)-1).long().cuda()
         # shape : (batch, )
         # prob. of predicting "unknown"
-        pred_unk = out_open[tmp_range, 0, predictions]
+        pred_unk = out_open_reshaped[tmp_range, 0, predictions]
         # shape : (num_unknown, )
         # index of "unknown" samples
         ind_unk = np.where(pred_unk.data.cpu().numpy() > 0.5)[0]
 
         # change predictions (unknowns)
-        predictions[ind_unk] = self.unknown_class
+        predictions[ind_unk] = self.unk_index
 
         return {
             'predictions' : predictions,
-            'total_logits' : out_t,
+            'logits' : out,
+            'logits_open' : out_open,
             'max_logits' : pred_unk
         }
     
-
-
-        
