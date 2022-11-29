@@ -350,8 +350,8 @@ def main(args, save_config):
         logger.info(f'Done training full step. Total time : {end_time-start_time}')
 
         # skip evaluation with low accuracy
-        if best_results['total_accuracy'] < 80:
-            logger.info(f'Low total accuracy {best_results["total_accuracy"]}. Skip testing.')
+        if best_results['accuracy'] < 55:
+            logger.info(f'Low total accuracy {best_results["accuracy"]}. Skip testing.')
             exit() 
 
     else:

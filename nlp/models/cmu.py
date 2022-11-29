@@ -98,8 +98,8 @@ class CMU(nn.Module):
         cls_state = last_hidden_state[:, 0, :]
         
         # cls_state         : (batch, hidden_dim)
-        # after_bottlenack  : (batch, 256)
-        # before_softmax    : (batch, num_class)
-        # after_softmax     : (batch, num_class)
-        cls_state, after_bottleneck, before_softmax, after_softmax = self.classifier(cls_state)
+        # feature           : (batch, 256)
+        # fc2_s ~ fc2_s5    : (batch, num_class)
+        # predict_prob      : (batch, num_class)
+        cls_state, feature, fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5, predict_prob = self.classifier(cls_state)
         
