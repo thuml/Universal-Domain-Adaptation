@@ -13,10 +13,10 @@ train:
   train: True                 # train model <-> only test model
   max_length: 512             # max length for tokenizer
   batch_size: 8         
-  num_train_epochs: 1        # total training epoch 
+  num_train_epochs: 10        # total training epoch 
   lr: 0.01 
   lr_scheduler_type: linear   # scheduler type
-  early_stop: 1               # early stopping epoch
+  early_stop: 3               # early stopping epoch
   seed: 1234                  # random seed
   multi: 0.1                  # loss weight
 

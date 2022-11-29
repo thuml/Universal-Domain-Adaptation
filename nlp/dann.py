@@ -32,7 +32,7 @@ cudnn.deterministic = True
 
 logger = logging.getLogger(__name__)
 
-def cheating_test(model, dataloader, unknown_class, metric_name='mean_accuracy', start=0.0, end=1.0, step=0.005):
+def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
 
@@ -275,12 +275,12 @@ def main(args, save_config):
                 writer.add_scalar(f'eval/{k}', v, global_step)
             
 
-            if results['mean_accuracy'] > best_acc:
-                best_acc = results['mean_accuracy']
+            if results['total_accuracy'] > best_acc:
+                best_acc = results['total_accuracy']
                 best_results = results
                 early_stop_count = 0
 
-                print_dict(logger, string=f'\n* BEST MEAN ACCURACY at epoch {current_epoch}', dict=results)
+                print_dict(logger, string=f'\n* BEST TOTAL ACCURACY at epoch {current_epoch}', dict=results)
 
                 logger.info('Saving best model...')
                 torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
@@ -295,8 +295,8 @@ def main(args, save_config):
         logger.info(f'Done training full step. Total time : {end_time-start_time}')
 
         # skip evaluation with low accuracy
-        if best_results['mean_accuracy'] < 80:
-            logger.info(f'Low mean accuracy {best_results["mean_accuracy"]}. Skip testing.')
+        if best_results['total_accuracy'] < 80:
+            logger.info(f'Low total accuracy {best_results["total_accuracy"]}. Skip testing.')
             exit() 
 
     else:
