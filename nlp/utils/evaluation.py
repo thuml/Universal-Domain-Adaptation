@@ -83,7 +83,7 @@ class Accuracy:
 
         num_total = len(correct)
         num_correct = len(correct[correct == True])
-        accuracy = num_correct / num_total 
+        accuracy = num_correct / num_total * 100
 
 
         assert num_total == self.num_samples, f'{num_total} != {self.num_samples}'
