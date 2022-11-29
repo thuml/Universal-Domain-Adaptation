@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 class HScore():
     def __init__(self, unknown_class_index):
@@ -53,4 +54,41 @@ class HScore():
             'unknown_accuracy' : unknown_accuracy,
             'mean_accuracy' : mean_accuracy,
             'total_accuracy' : total_accuracy
+        }
+
+class Accuracy:
+    def __init__(self):
+        self.predictions = []
+        self.references = []
+        self.num_samples = 0
+
+    def add_batch(self, predictions, references):
+        prediction_count = predictions.shape[0]
+        reference_count = references.shape[0]
+        assert prediction_count == reference_count, f'{prediction_count} != {reference_count}'
+        self.num_samples += prediction_count
+
+        self.predictions.append(predictions)
+        self.references.append(references)
+
+        assert len(self.predictions) == len(self.references), f'{len(self.predictions)} != {len(self.references)}'
+    
+    def compute(self):
+        # shape : (num_samples, )
+        predictions = torch.concat(self.predictions)
+        # shape : (num_samples, )
+        references = torch.concat(self.references)
+
+        correct = predictions == references
+
+        num_total = len(correct)
+        num_correct = len(correct[correct == True])
+        accuracy = num_correct / num_total 
+
+
+        assert num_total == self.num_samples, f'{num_total} != {self.num_samples}'
+
+        return {
+            'accuracy' : accuracy,
+            'num_samples' : self.num_samples
         }

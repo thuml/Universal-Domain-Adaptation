@@ -24,7 +24,7 @@ from transformers import (
 from models.uan import UAN
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
-from utils.evaluation import HScore
+from utils.evaluation import HScore, Accuracy
 from utils.data import get_dataloaders, ForeverDataIterator
 
 cudnn.benchmark = True
@@ -90,6 +90,32 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
     best_results['threshold'] = best_threshold
 
     return best_results
+
+
+def eval_with_threshold(model, dataloader, unknown_class, threshold):
+    logger.info(f'Test with threshold {threshold}')
+    metric = Accuracy()
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='testing '):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            # pdb.set_trace()
+            predictions[max_logits < threshold] = unknown_class
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
+    results['threshold'] = threshold
+
+    return results
 
 def test_with_threshold(model, dataloader, unknown_class, threshold):
     logger.info(f'Test with threshold {threshold}')
@@ -295,14 +321,14 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = test_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
+            results = eval_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
             
 
-            if results['total_accuracy'] > best_acc:
-                best_acc = results['total_accuracy']
+            if results['accuracy'] > best_acc:
+                best_acc = results['accuracy']
                 best_results = results
                 early_stop_count = 0
 

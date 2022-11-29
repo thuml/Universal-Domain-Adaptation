@@ -25,7 +25,7 @@ from transformers import (
 from models.ovanet import OVANET
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
-from utils.evaluation import HScore
+from utils.evaluation import HScore, Accuracy
 from utils.data import get_dataloaders, ForeverDataIterator
 
 cudnn.benchmark = True
@@ -33,6 +33,27 @@ cudnn.deterministic = True
 
 
 logger = logging.getLogger(__name__)
+
+def eval(model, dataloader):
+    logger.info('Test without threshold.')
+    metric = Accuracy()
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='testing '):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # predictions : (batch, )
+            predictions = outputs['predictions']
+
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
+
+    return results
 
 def test(model, dataloader, unknown_class):
     logger.info('Test without threshold.')
@@ -256,14 +277,14 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = test(model, test_dataloader, unknown_label)
+            results = eval(model, test_dataloader)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
             
 
-            if results['total_accuracy'] > best_acc:
-                best_acc = results['total_accuracy']
+            if results['accuracy'] > best_acc:
+                best_acc = results['accuracy']
                 best_results = results
                 early_stop_count = 0
 

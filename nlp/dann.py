@@ -24,13 +24,68 @@ from transformers import (
 from models.dann import DANN
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
-from utils.evaluation import HScore
+from utils.evaluation import HScore,Accuracy
 from utils.data import get_dataloaders, ForeverDataIterator
 cudnn.benchmark = True
 cudnn.deterministic = True
 
 
 logger = logging.getLogger(__name__)
+
+def cheating_eval(model, dataloader, unknown_class, metric_name='accuracy', start=0.0, end=1.0, step=0.005):
+    thresholds = list(np.arange(start, end, step))
+    num_thresholds = len(thresholds)
+
+    metric = Accuracy()
+
+    print(f'Number of thresholds : {num_thresholds}')
+
+    metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
+
+    model.eval()
+    with torch.no_grad():
+        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
+
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            # check for best threshold
+            for index in range(num_thresholds):
+                tmp_predictions = predictions.clone().detach()
+                threshold = thresholds[index]
+
+                unknown = (max_logits < threshold).squeeze()
+                tmp_predictions[unknown] = unknown_class
+
+                metrics[index].add_batch(
+                    predictions=tmp_predictions,
+                    references=labels
+                )
+
+    best_threshold = 0
+    best_metric = 0
+    best_results = None
+
+    for index in range(num_thresholds):
+        threshold = thresholds[index]
+
+        results = metrics[index].compute()
+        current_metric = results[metric_name] * 100
+
+        if current_metric >= best_metric:
+            best_metric = current_metric
+            best_threshold = threshold
+            best_results = results
+
+    best_results['threshold'] = best_threshold
+
+    return best_results
 
 def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
@@ -269,14 +324,14 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = cheating_test(model, eval_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+            results = cheating_eval(model, eval_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
             
 
-            if results['total_accuracy'] > best_acc:
-                best_acc = results['total_accuracy']
+            if results['accuracy'] > best_acc:
+                best_acc = results['accuracy']
                 best_results = results
                 early_stop_count = 0
 
