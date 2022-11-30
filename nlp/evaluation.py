@@ -252,7 +252,7 @@ def main(args, save_config):
     model = METHOD(
         model_name=args.model.model_name_or_path,
         num_class=num_class,
-        max_train_step=0,
+        max_train_step=100,     # dummy value
     ).cuda()
     end_time = time.time()
     loading_time = end_time - start_time
