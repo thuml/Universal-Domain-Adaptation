@@ -51,22 +51,21 @@ def get_all_predictions(model, dataloader, unknown_class):
     
     model.eval()
     with torch.no_grad():
-        for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
-            im = im.cuda()
-            label = label.cuda()
+        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
 
-            # predictions   : (batch, )
-            # max_logits    : (batch, )
-            # total_logits  : (batch, num_source_class)
-            outputs  = model.get_prediction_and_logits(im)
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
             predictions, total_logits, max_logits = outputs['predictions'], outputs['logits'], outputs['max_logits']
 
             # for in-domain <-> adaptable-domain (no unknown class)
             # shape : (batch, num_source_class)
-            one_hot_label = one_hot(label, num_classes=unknown_class) if unknown_class not in label else None
+            one_hot_label = one_hot(labels, num_classes=unknown_class) if unknown_class not in labels else None
 
 
-            labels_list.append(label.cpu().detach().numpy())
+            labels_list.append(labels.cpu().detach().numpy())
             if one_hot_label is not None:
                 one_hot_labels_list.append(one_hot_label.cpu().detach().numpy())
             predictions_list.append(max_logits.cpu().detach().numpy())
