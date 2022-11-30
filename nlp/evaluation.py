@@ -243,7 +243,7 @@ def main(args, save_config):
     unknown_dataloader = DataLoader(unknown_dataset, collate_fn=data_collator, batch_size=args.test.batch_size, shuffle=False) 
     adaptable_dataloader = DataLoader(adaptable_dataset, collate_fn=data_collator, batch_size=args.test.batch_size, shuffle=False) 
 
-    pdb.set_trace()
+    # pdb.set_trace()
 
     ## INIT MODEL ##
     logger.info(f'Init model {args.method_name} ...')
