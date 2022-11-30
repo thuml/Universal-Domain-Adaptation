@@ -37,6 +37,7 @@ class ResClassifier_MME(nn.Module):
         w = self.fc.weight.data
         norm = w.norm(p=2, dim=1, keepdim=True)
         self.fc.weight.data = w.div(norm.expand_as(w))
+
     def weights_init(self):
         self.fc.weight.data.normal_(0.0, 0.1)
 
@@ -58,9 +59,9 @@ class OVANET(nn.Module):
 
         self.hidden_dim = self.model.config.hidden_size
 
-        self.C2 = ResClassifier_MME(num_classes=2 * self.num_class,
-                           norm=False, input_size=self.hidden_dim)
         self.C1 = ResClassifier_MME(num_classes=self.num_class,
+                           norm=False, input_size=self.hidden_dim)
+        self.C2 = ResClassifier_MME(num_classes=2 * self.num_class,
                            norm=False, input_size=self.hidden_dim)
 
 
