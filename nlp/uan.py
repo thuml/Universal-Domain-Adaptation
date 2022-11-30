@@ -147,7 +147,6 @@ def cheating_eval(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.0
 
     return best_results
 
-
 def eval_with_threshold(model, dataloader, unknown_class, threshold):
     logger.info(f'Test with threshold {threshold}')
     metric = Accuracy()
@@ -267,6 +266,7 @@ def main(args, save_config):
     best_acc = 0
     best_results = None
     early_stop_count = 0
+    best_threshold = 0
 
     
     # data iter
@@ -420,9 +420,13 @@ def main(args, save_config):
 
     logger.info('Loading best model ...')
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
+
+    best_threshold = best_results['threshold']
             
     logger.info('Test model...')
-    results = test_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
+    results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
+    # for optimal uan method, we use a fixed threshold = -0.5
+    # results = test_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
     for k,v in results.items():
         writer.add_scalar(f'test/{k}', v, 0)
 
