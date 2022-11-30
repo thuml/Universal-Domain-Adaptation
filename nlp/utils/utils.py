@@ -21,11 +21,15 @@ def parse_args():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--config', type=str, default='config.yaml', help='/path/to/config/file')
     parser.add_argument('--lr', type=float, default=None, help='Custom learning rate.')
+    parser.add_argument('--threshold', type=float, default=None, help='Custom threshold.')
     parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
+    parser.add_argument('--method_name', type=str, default=None, help='method name to evaluate')
 
     args = parser.parse_args()
     lr = args.lr
     seed = args.seed
+    method_name = args.method_name
+    threshold = args.threshold
 
     config_file = args.config
 
@@ -35,8 +39,12 @@ def parse_args():
 
     args = easydict.EasyDict(args)
 
+    args.train.seed = seed
     if lr is not None:
         args.train.lr = lr
-    args.train.seed = seed
+    if method_name is not None:
+        args.method_name = method_name
+    if threshold is not None:
+        args.test.threshold = threshold
 
     return args, save_config

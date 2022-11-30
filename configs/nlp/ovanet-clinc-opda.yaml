@@ -20,5 +20,8 @@ train:
   seed: 1234                  # random seed
   multi: 0.1                  # loss weight
 
+test:
+  batch_size: 16
+
 log:
   output_dir: nlp_log
