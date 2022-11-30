@@ -1,7 +1,7 @@
 import os
 
 from torch.utils.data import DataLoader
-from transformers import default_data_collator
+from transformers import default_data_collator, DataCollatorWithPadding
 
 from datasets import load_dataset
 
@@ -124,7 +124,7 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
      # default tokenizing function
     def preprocess_function(examples):
         texts = (examples[input_key],)
-        result = tokenizer(*texts, padding="max_length", max_length=max_length, truncation=True)
+        result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True)
         
         if coarse_label in examples:
             result["labels"] = examples[coarse_label]
@@ -164,7 +164,9 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
         desc="Running tokenizer on target test dataset",
     )
 
-    data_collator = default_data_collator
+    # data_collator = default_data_collator
+    data_collator = DataCollatorWithPadding(tokenizer)
+    
     train_dataloader = DataLoader(train_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
     # unused in fine-tuning
     train_unlabeled_dataloader = DataLoader(train_unlabeled_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
