@@ -9,9 +9,11 @@ import numpy as np
 import torch.backends.cudnn as cudnn
 import pdb
 
+from torch.nn.functional import one_hot
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, DataCollatorWithPadding
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 from models import (
     bert,
@@ -40,6 +42,58 @@ METHOD_TO_MODEL = {
 
 THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu']
 
+# get all maximum logits values for calculating auroc
+def get_all_predictions(model, dataloader, unknown_class):
+    one_hot_labels_list = []
+    labels_list = []
+    predictions_list = []
+    logits_list = []
+    
+    model.eval()
+    with torch.no_grad():
+        for i, (im, label) in enumerate(tqdm(dataloader, desc='testing ')):
+            im = im.cuda()
+            label = label.cuda()
+
+            # predictions   : (batch, )
+            # max_logits    : (batch, )
+            # total_logits  : (batch, num_source_class)
+            outputs  = model.get_prediction_and_logits(im)
+            predictions, total_logits, max_logits = outputs['predictions'], outputs['logits'], outputs['max_logits']
+
+            # for in-domain <-> adaptable-domain (no unknown class)
+            # shape : (batch, num_source_class)
+            one_hot_label = one_hot(label, num_classes=unknown_class) if unknown_class not in label else None
+
+
+            labels_list.append(label.cpu().detach().numpy())
+            if one_hot_label is not None:
+                one_hot_labels_list.append(one_hot_label.cpu().detach().numpy())
+            predictions_list.append(max_logits.cpu().detach().numpy())
+            logits_list.append(total_logits.cpu().detach().numpy())
+
+    # shape : (num_samples, )
+    # concatenate all predictions and labels
+    labels = np.concatenate(labels_list)
+    one_hot_labels = np.concatenate(one_hot_labels_list) if len(one_hot_labels_list) > 0 else None
+    predictions = np.concatenate(predictions_list)
+    logits = np.concatenate(logits_list)
+
+    return {
+        'labels' : labels,
+        'one_hot_labels' : one_hot_labels,
+        'predictions' : predictions,
+        'logits' : logits,
+    }
+
+
+# calculate auroc
+def calculate_auroc(labels, predictions, unknown_index):
+    fpr, tpr, thresholds = roc_curve(labels, predictions, pos_label=unknown_index)
+    roc_auc = auc(fpr, tpr) * 100
+
+    return roc_auc
+
 def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
@@ -49,6 +103,8 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
     print(f'Number of thresholds : {num_thresholds}')
 
     metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
+
+    max_logits_list = []
 
     model.eval()
     with torch.no_grad():
@@ -62,6 +118,8 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
             # max_logits  : (batch, )
             # predictions : (batch, )
             max_logits, predictions = outputs['max_logits'], outputs['predictions']
+            
+            max_logits_list.append(max_logits)
 
             # check for best threshold
             for index in range(num_thresholds):
@@ -92,8 +150,10 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
             best_results = results
 
     best_results['threshold'] = best_threshold
+    
+    max_logits_list = torch.concat(max_logits_list)
 
-    return best_results
+    return best_results, max_logits_list
 
 
 def eval_with_threshold(model, dataloader, unknown_class, threshold):
@@ -227,12 +287,70 @@ def main(args, save_config):
         print_dict(logger, string=f'\n\n** TARGET TEST RESULT', dict=results)
 
         # cheating test : target test set
-        results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+        results, max_logits_list = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
         print_dict(logger, string=f'\n\n** OPTIMAL TARGET TEST RESULT', dict=results)
+
+        # show results with threshold at 95%
+        total_count = len(max_logits_list)
+        sorted_logits, indices = torch.sort(max_logits_list, descending=True)
+        threshold_index = round(total_count * 0.95)
+        threshold = sorted_logits[threshold_index]
+
+        logger.info('* H-score @ 95 ...')
+        results = test_with_threshold(model, test_dataloader, unknown_label, threshold)
+        print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
     
     else:
         pass
 
+
+
+    #####################
+    #                   #
+    #  CALCULATE AUROC  #
+    #                   #
+    #####################
+    logger.info('** CALCULATE AUROC\n\n')
+    
+    # in-domain predictions
+    source_outputs = get_all_predictions(model=model, dataloader=source_test_dataloader, unknown_class=unknown_label)
+    source_labels, one_hot_source_labels, source_predictions, source_logits = source_outputs['labels'], source_outputs['one_hot_labels'], source_outputs['predictions'], source_outputs['logits']
+
+    # adaptable-domain predictions
+    known_outputs = get_all_predictions(model=model, dataloader=adaptable_dataloader, unknown_class=unknown_label)
+    known_labels, one_hot_known_labels, known_predictions, known_logits = known_outputs['labels'], known_outputs['one_hot_labels'], known_outputs['predictions'], known_outputs['logits']
+
+    # unknown-domain predictions
+    unknown_outputs = get_all_predictions(model=model, dataloader=unknown_dataloader, unknown_class=unknown_label)
+    unknown_labels, one_hot_unknown_labels, unknown_predictions, unknown_logits = unknown_outputs['labels'], unknown_outputs['one_hot_labels'], unknown_outputs['predictions'], unknown_outputs['logits']
+
+    ## in-domain <-> unknown
+    labels = np.concatenate([source_labels, unknown_labels])
+    predictions = np.concatenate([source_predictions, unknown_predictions])
+ 
+    auroc1 = calculate_auroc(labels, predictions, unknown_index=unknown_label)
+    
+    ## adaptable <-> unknown
+    labels = np.concatenate([known_labels, unknown_labels])
+    predictions = np.concatenate([known_predictions, unknown_predictions])
+ 
+    auroc2 = calculate_auroc(labels, predictions, unknown_index=unknown_label)
+
+    if auroc1 < 50 and auroc2 < 50:
+        auroc1 = 100 - auroc1
+        auroc2 = 100 - auroc2
+
+    
+    ## in-domain <-> adaptable
+    one_hot_labels = np.concatenate([one_hot_source_labels, one_hot_known_labels])
+    logits = np.concatenate([source_logits, known_logits])
+    auroc3 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovo') * 100
+    auroc4 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovr') * 100
+
+    logger.info(f'AUROC : IND   <-> UNKNOWN       : {auroc1}')
+    logger.info(f'AUROC : ADAPT <-> UNKNOWN       : {auroc2}')
+    logger.info(f'AUROC : IND   <-> UNKNOWN (ovo) : {auroc3}')
+    logger.info(f'AUROC : IND   <-> UNKNOWN (ovr) : {auroc4}')
 
     logger.info('Done.')
 
