@@ -21,7 +21,7 @@ train:
   multi: 0.1                  # loss weight
 
 test:
-  batch_size: 16
+  batch_size: 64
 
 log:
   output_dir: nlp_log
