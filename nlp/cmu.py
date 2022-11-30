@@ -124,25 +124,7 @@ def eval_with_threshold(model, dataloader, unknown_class, threshold):
 
             outputs = model(**test_batch)
 
-            source_logits, source_1, source_2, source_3, source_4, source_5, predictions = \
-                    outputs['logits'], outputs['fc2_1'], outputs['fc2_2'], outputs['fc2_3'], \
-                        outputs['fc2_4'], outputs['fc2_5'], outputs['predictions']
-            
-            
-            entropy = get_entropy(source_1, source_2, source_3, source_4, source_5).detach()
-            consistency = get_consistency(source_1, source_2, source_3, source_4, source_5).detach()
-            # confidence, indices = torch.max(predict_prob, dim=1)
-            confidence = get_confidence(source_1, source_2, source_3, source_4, source_5).detach()
-
-            
-            entropy = norm(torch.tensor(entropy))
-            consistency = norm(torch.tensor(consistency))
-            confidence = norm(torch.tensor(confidence))
-
-            # TODO : re?
-            weight = (1 - entropy + 1 - consistency + confidence) / 3
-            # weight = (entropy + consistency) / 2
-            # threshold = torch.mean(weight).cuda()
+            weight, predictions = outputs['max_logits'], outputs['predictions']
 
             predictions[weight <= threshold] = unknown_class
             
