@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 
 lrs='5e-4 1e-4 5e-5 1e-5'
@@ -14,3 +14,5 @@ for seed in  $seeds; do
         python nlp/cmu.py --config configs/nlp/cmu-massive-opda.yaml --lr $lr --seed $seed
     done
 done
+
+sh scripts/massive/uan.sh

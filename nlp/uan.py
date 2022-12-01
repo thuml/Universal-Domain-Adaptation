@@ -378,7 +378,7 @@ def main(args, save_config):
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
             # results = eval_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
-            results = cheating_eval(model, test_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+            results = cheating_eval(model, eval_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
     
             # write to tensorboard
             for k,v in results.items():

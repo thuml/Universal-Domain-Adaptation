@@ -79,6 +79,7 @@ class OVANET(nn.Module):
             attention_mask=attention_mask,
             position_ids=position_ids,
         )
+        batch_size, input_length = input_ids.shape
 
         # shape : (batch, length, hidden_dim)
         last_hidden_state = outputs.last_hidden_state
@@ -94,10 +95,10 @@ class OVANET(nn.Module):
         predictions = out.argmax(dim=-1)
 
         # shape : (batch, 2, num_source_class)
-        out_open_reshaped = F.softmax(out_open.view(out.size(0), 2, -1), 1)
+        out_open_reshaped = F.softmax(out_open.view(batch_size, 2, -1), 1)
 
         # shape : (batch, )
-        tmp_range = torch.range(0, out.size(0)-1).long().cuda()
+        tmp_range = torch.arange(0, batch_size).long().cuda()
         # shape : (batch, )
         # prob. of predicting "unknown"
         pred_unk = out_open_reshaped[tmp_range, 0, predictions]

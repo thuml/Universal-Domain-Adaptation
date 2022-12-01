@@ -278,7 +278,7 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = eval(model, test_dataloader)
+            results = eval(model, eval_dataloader)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)

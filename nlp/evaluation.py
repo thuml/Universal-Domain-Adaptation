@@ -155,6 +155,27 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
     return best_results, max_logits_list
 
 
+def eval(model, dataloader, unknown_class,):
+    metric = Accuracy()
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='testing '):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
+
+    return results
+
 def eval_with_threshold(model, dataloader, unknown_class, threshold):
     logger.info(f'Test with threshold {threshold}')
     metric = Accuracy()
@@ -177,6 +198,28 @@ def eval_with_threshold(model, dataloader, unknown_class, threshold):
     
     results = metric.compute()
     results['threshold'] = threshold
+
+    return results
+
+def test(model, dataloader, unknown_class):
+    metric = HScore(unknown_class)
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='testing '):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            # pdb.set_trace()
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
 
     return results
 
@@ -300,8 +343,17 @@ def main(args, save_config):
         print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
     
     else:
-        pass
+        # eval : source eval set
+        results = eval(model, eval_dataloader, unknown_label)
+        print_dict(logger, string=f'\n\n** SOURCE EVAL RESULT', dict=results)
 
+        # eval : source test set
+        results = eval(model, source_test_dataloader, unknown_label)
+        print_dict(logger, string=f'\n\n** SOURCE TEST RESULT', dict=results)
+
+        # test : target test set
+        results = test(model, test_dataloader, unknown_label)
+        print_dict(logger, string=f'\n\n** TARGET TEST RESULT', dict=results)
 
 
     #####################
