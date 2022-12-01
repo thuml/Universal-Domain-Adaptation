@@ -365,8 +365,8 @@ def main(args, save_config):
 
     logger.info(f'AUROC : IND   <-> UNKNOWN       : {auroc1}')
     logger.info(f'AUROC : ADAPT <-> UNKNOWN       : {auroc2}')
-    logger.info(f'AUROC : IND   <-> UNKNOWN (ovo) : {auroc3}')
-    logger.info(f'AUROC : IND   <-> UNKNOWN (ovr) : {auroc4}')
+    logger.info(f'AUROC : IND   <-> ADAPT   (ovo) : {auroc3}')
+    logger.info(f'AUROC : IND   <-> ADAPT   (ovr) : {auroc4}')
 
 
     

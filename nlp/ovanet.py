@@ -201,6 +201,7 @@ def main(args, save_config):
 
                 # optimizer zero-grad
                 optimizer.zero_grad()
+                model.C2.weight_norm()
 
                 ####################
                 #                  #
