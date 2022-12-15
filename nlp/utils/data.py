@@ -175,3 +175,11 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
     source_test_dataloader = DataLoader(source_test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
     
     return train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader
+
+
+
+def get_datasets(root_path, task_name, seed, num_common_class):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class)
+    
+    return train_data, train_unlabeled_data, val_data, test_data, source_test_data
