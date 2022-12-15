@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 
 
@@ -56,28 +56,28 @@ python nlp/evaluation.py --config configs/nlp/dann-massive-opda.yaml --method_na
 
 
 
-# # uan
-# method='uan'
+# uan
+method='uan'
 
-# seed='1234'
-# lr='1e-4'
-# threshold='-0.08'
-# python nlp/evaluation.py --config configs/nlp/uan-clinc-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='1234'
+lr='1e-3'
+threshold='-0.21'
+python nlp/evaluation.py --config configs/nlp/uan-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='2134'
-# lr='1e-4'
-# threshold='0.5'
-# python nlp/evaluation.py --config configs/nlp/uan-clinc-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='2134'
+lr='1e-4'
+threshold='0.3'
+python nlp/evaluation.py --config configs/nlp/uan-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='3412'
-# lr='1e-4'
-# threshold='0.2'
-# python nlp/evaluation.py --config configs/nlp/uan-clinc-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='3412'
+lr='5e-5'
+threshold='-0.33'
+python nlp/evaluation.py --config configs/nlp/uan-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='4132'
-# lr='1e-5'
-# threshold='0.26'
-# python nlp/evaluation.py --config configs/nlp/uan-clinc-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='4132'
+lr='1e-5'
+threshold='-0.36'
+python nlp/evaluation.py --config configs/nlp/uan-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 
 

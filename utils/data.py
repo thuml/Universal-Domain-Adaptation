@@ -99,7 +99,7 @@ def get_dataset_file(args):
 
 
 
-def get_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
+def get_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes, return_id=False):
     
     dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
 
@@ -117,13 +117,13 @@ def get_dataloaders(args, source_classes, target_classes, common_classes, source
     ])
 
     source_train_ds = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
-                                transform=train_transform, filter=(lambda x: x in source_classes))
+                                transform=train_transform, return_id=return_id, filter=(lambda x: x in source_classes))
     source_test_ds = FileListDataset(list_path=source_file,path_prefix=dataset.prefixes[args.data.dataset.source],
-                                transform=test_transform, filter=(lambda x: x in source_classes))
+                                transform=test_transform, return_id=False, filter=(lambda x: x in source_classes))
     target_train_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],
-                                transform=train_transform, filter=(lambda x: x in target_classes))
+                                transform=train_transform, return_id=return_id, filter=(lambda x: x in target_classes))
     target_test_ds = FileListDataset(list_path=target_file, path_prefix=dataset.prefixes[args.data.dataset.target],
-                                transform=test_transform, filter=(lambda x: x in target_classes))
+                                transform=test_transform, return_id=False, filter=(lambda x: x in target_classes))
     
     print(f'\n\nsource train : {len(source_train_ds)}')
     print(f'target train : {len(target_train_ds)}')
