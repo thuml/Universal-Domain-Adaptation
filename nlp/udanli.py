@@ -37,7 +37,6 @@ cudnn.deterministic = True
 
 logger = logging.getLogger(__name__)
 
-ADV_WEIGHT = 0
 
 # input keys
 coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
@@ -125,7 +124,7 @@ def main(args, save_config):
     seed_everything(args.train.seed)
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli-{ADV_WEIGHT}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli-{args.train.adv_weight}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -154,7 +153,6 @@ def main(args, save_config):
     #  select one samples per class #
     #                               #
     #################################
-    
 
     source_labels_set = sorted(set(train_data[coarse_label]))
     logger.info(f'Select one sample per class : {source_labels_set}')
@@ -239,7 +237,7 @@ def main(args, save_config):
 
 
     global_step = 0
-    best_acc = 0
+    best_acc = -1.0
     best_results = None
     early_stop_count = 0
 
@@ -284,38 +282,46 @@ def main(args, save_config):
                 # list of labels (batch_size)
                 labels = source_batch.get(coarse_label)
 
-                # entailment
-                entailment_batch = []
-                for index, label in enumerate(labels):
-                    source_sentence = source_sentences[index]
-                    entailment_sample = selected_samples.get(label.item()).get(input_key)
-                    entailment_batch.append([entailment_sample, source_sentence])
+                ####################
+                #                  #
+                #   NLI training   #
+                #                  #
+                ####################
 
-                entailment_batch = tokenizer(entailment_batch, padding=True, return_tensors='pt')
-                entailment_batch = {k: v.cuda() for k, v in entailment_batch.items()}
+                nli_loss = None
+                for candidate_label, candidate_sample in selected_samples.items():
+                    nli_batch = []
+                    # make nli labels
+                    nli_labels = torch.zeros_like(labels).cuda()
+                    nli_labels[labels==candidate_label] = 1
+                    candidate_sentence = candidate_sample.get(input_key)
+                    # generate nli sampels
+                    for source_sentence in source_sentences:
+                        nli_batch.append([candidate_sentence, source_sentence])
+                    # tokenize
+                    nli_batch = tokenizer(nli_batch, padding=True, return_tensors='pt')
+                    nli_batch = {k: v.cuda() for k, v in nli_batch.items()}
 
-                entailment_output = model(**entailment_batch, is_nli=True)
-                entailment_logits = entailment_output.get('logits')
+                    ## forward pass
+                    nli_output = model(**nli_batch, is_nli=True)
+                    nli_logits = nli_output.get('logits')
 
-                # contradiction
-                contradiction_batch = []
-                for index, label in enumerate(labels):
-                    source_sentence = source_sentences[index]
-                    contradiction_candidates = list(source_labels_set.copy())
-                    contradiction_candidates.remove(label)
+                    ## compute loss
+                    loss = ce(nli_logits, nli_labels)
 
-                    random_label = random.randint(0, len(contradiction_candidates)-1)
-                    contradiction_sample = selected_samples.get(random_label).get(input_key)
+                    nli_loss = loss if nli_loss is None else nli_loss + loss
+                
+                # normalize
+                nli_loss = nli_loss / len(selected_samples)
 
-                    contradiction_batch.append([contradiction_sample, source_sentence])
 
-                contradiction_batch = tokenizer(contradiction_batch, padding=True, return_tensors='pt')
-                contradiction_batch = {k: v.cuda() for k, v in contradiction_batch.items()}
-
-                contradiction_output = model(**contradiction_batch, is_nli=True)
-                contradiction_logits = contradiction_output.get('logits')
-
-                ## domain adversarial training
+                ####################
+                #                  #
+                #   Adv. Training  #
+                #                  #
+                ####################
+                
+                ## source
                 tokenized_source_batch = tokenizer(source_batch.get(input_key), padding=True, return_tensors='pt')
                 tokenized_source_batch['labels'] = source_batch.get(coarse_label)
                 tokenized_source_batch = {k: v.cuda() for k, v in tokenized_source_batch.items()}
@@ -328,31 +334,21 @@ def main(args, save_config):
                 target_output = model(**target_batch, is_nli=False)
                 target_domain_logit = target_output.get('domain_output')
 
-                
-                ####################
-                #                  #
-                #   Compute Loss   #
-                #                  #
-                ####################
-
-                # entailment
-                entailment_loss = ce(entailment_logits, torch.full((entailment_logits.shape[0], ), 1).cuda())
-
-                # contradiction
-                contradiction_loss = ce(contradiction_logits, torch.full((contradiction_logits.shape[0], ), 0).cuda())
-
-                # domain adversarial
+                ## compute loss
                 source_adv_loss = bce(source_domain_logit, torch.ones_like(source_domain_logit))
                 target_adv_loss = bce(target_domain_logit, torch.zeros_like(target_domain_logit))
 
-                # total loss
-                loss = (1-ADV_WEIGHT) * (entailment_loss + contradiction_loss) + ADV_WEIGHT * (source_adv_loss + target_adv_loss)
+                               
+
+                ## total loss
+                loss = (1-args.train.adv_weight) * nli_loss + args.train.adv_weight * (source_adv_loss + target_adv_loss)
+                # loss = nli_loss + (source_adv_loss + target_adv_loss)
+
 
 
                 # write to tensorboard
                 writer.add_scalar('train/loss', loss, global_step)
-                writer.add_scalar('train/entailment_loss', entailment_loss, global_step)
-                writer.add_scalar('train/contradiction_loss', contradiction_loss, global_step)
+                writer.add_scalar('train/nli_loss', nli_loss, global_step)
                 writer.add_scalar('train/source_adv_loss', source_adv_loss, global_step)
                 writer.add_scalar('train/target_adv_loss', target_adv_loss, global_step)
 
