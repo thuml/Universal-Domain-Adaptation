@@ -24,12 +24,16 @@ def parse_args():
     parser.add_argument('--threshold', type=float, default=None, help='Custom threshold.')
     parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
     parser.add_argument('--method_name', type=str, default=None, help='method name to evaluate')
+    # for generating dataset
+    parser.add_argument('--num_nli_sample', type=int, default=None, help='number of samples for entailment / contradiction')
 
     args = parser.parse_args()
     lr = args.lr
     seed = args.seed
     method_name = args.method_name
     threshold = args.threshold
+    # for dataset generation
+    num_nli_sample = args.num_nli_sample
 
     config_file = args.config
 
@@ -46,5 +50,7 @@ def parse_args():
         args.method_name = method_name
     if threshold is not None:
         args.test.threshold = threshold
+    if num_nli_sample is not None:
+        args.num_nli_sample = num_nli_sample
 
     return args, save_config

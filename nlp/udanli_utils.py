@@ -1,5 +1,7 @@
+import pdb
 
-
+import torch
+import numpy as np
 from torch.utils.data import DataLoader
 
 from transformers import DataCollatorWithPadding
@@ -19,19 +21,27 @@ def select_samples(model, tokenizer, source_labels_list, train_data, coarse_labe
 
         return result
     
-    # preprocess dataset
-    train_data = train_data.map(
-        preprocess_function,
-        batched=True,
-        remove_columns=train_data.column_names,
-        desc="Running tokenizer on source train dataset",
-    )
+    # # preprocess dataset
+    # train_data = train_data.map(
+    #     preprocess_function,
+    #     batched=True,
+    #     remove_columns=train_data.column_names,
+    #     desc="Running tokenizer on source train dataset",
+    # )
     
+    selected_samples = dict()
     # generate distributions for each label
     for source_label in source_labels_list:
-        selected_data = train_data.filter(lambda sample : sample["labels"] == source_label)
+        selected_data = train_data.filter(lambda sample : sample[coarse_label] == source_label)
 
-        dl = DataLoader(selected_data, collate_fn=data_collator, batch_size=batch_size, shuffle=False)
+        tokenized_selected_data = selected_data.map(
+            preprocess_function,
+            batched=True,
+            remove_columns=selected_data.column_names,
+            desc="Running tokenizer on source train dataset",
+        )
+
+        dl = DataLoader(tokenized_selected_data, collate_fn=data_collator, batch_size=batch_size, shuffle=False)
     
         with torch.no_grad():
             embeddings_list = []
@@ -50,13 +60,26 @@ def select_samples(model, tokenizer, source_labels_list, train_data, coarse_labe
             class_mean = embeddings_list.mean(0)
 
             # shape : (num_samples, hidden_dim)
-            centered_embeddings_list = embeddings_list - class_mean
+            centered_embeddings_list = (embeddings_list - class_mean).clone().detach().cpu().numpy()
 
             # calculate variance
+            # shape : (hidden_dim, hidden_dim)
             class_variance = LedoitWolf().fit(centered_embeddings_list).precision_.astype(np.float32)
+            class_variance = torch.from_numpy(class_variance).float().cuda()
 
-            maha_score_list = []
-            for sample_index, embedding in enumerate(embeddings_list):
+            # shape : (num_samples, hidden_dim)
+            centered_embeddings_list = embeddings_list - class_mean
+            # calculate mahalanobis distance
+            # shape : (num_samples, )
+            maha_scores = torch.diag(centered_embeddings_list @ class_variance @ centered_embeddings_list.t())
+            
+            selected_index = maha_scores.argmin().item()
+
+            selected_sample = selected_data[selected_index]
+
+            selected_samples[source_label] = selected_sample
                 
+    # pdb.set_trace()
 
+    return selected_samples
         

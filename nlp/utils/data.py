@@ -183,3 +183,17 @@ def get_datasets(root_path, task_name, seed, num_common_class):
     train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class)
     
     return train_data, train_unlabeled_data, val_data, test_data, source_test_data
+
+
+def get_nli_datasets(root_path, task_name, seed, num_common_class, num_nli_sample):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class)
+
+    # UNIDA setting
+    # set dataset path
+    data_path = os.path.join(root_path, task_name, f'{seed}_{num_common_class}')
+    nli_path = os.path.join(data_path, f'nli_{num_nli_sample}.jsonl')
+    nli_data = load_dataset('json', data_files=nli_path)['train']
+
+    
+    return nli_data, train_data, train_unlabeled_data, val_data, test_data, source_test_data
