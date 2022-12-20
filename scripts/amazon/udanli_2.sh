@@ -23,8 +23,6 @@ seeds='2134 3412 4132'
 # done
 
 
-seeds='1234'
-lrs='1e-5'
 for seed in  $seeds; do
     for lr in $lrs; do
         python nlp/udanli_v9.py --config configs/nlp/udanli-clinc-opda_0.7.yaml --lr $lr --seed $seed --num_nli_sample 2

@@ -90,7 +90,7 @@ class AdversarialNetwork2(nn.Module):
 
 
 class UDANLI(nn.Module):
-    def __init__(self, model_name, num_class, max_train_step, **kwargs):
+    def __init__(self, model_name, num_class, max_train_step=0, **kwargs):
         super(UDANLI, self).__init__()
         print('INIT UDANLI...')
         self.model_name = model_name

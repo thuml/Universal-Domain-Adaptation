@@ -78,9 +78,12 @@ def load_single_dataset(benchmark, task, num_unlabeled):
     assert task in ['books', 'dvd', 'electronics', 'kitchen']
 
     # TODO : customize?
-    train_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/train.jsonl'
-    test_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/test.jsonl'
-    unlabeled_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/unlabeled.jsonl'
+    # train_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/train.jsonl'
+    # test_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/test.jsonl'
+    # unlabeled_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/unlabeled.jsonl'
+    train_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/train.jsonl'
+    test_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/test.jsonl'
+    unlabeled_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/unlabeled.jsonl'
 
     train_data = load_dataset('json', data_files=train_path)['train']
     test_data = load_dataset('json', data_files=test_path)['train']
@@ -178,9 +181,9 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
 
 
 
-def get_datasets(root_path, task_name, seed, num_common_class):
+def get_datasets(root_path, task_name, seed, num_common_class, source=None, target=None):
     ## LOAD DATASETS ##
-    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class)
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
     
     return train_data, train_unlabeled_data, val_data, test_data, source_test_data
 
@@ -197,3 +200,27 @@ def get_nli_datasets(root_path, task_name, seed, num_common_class, num_nli_sampl
 
     
     return nli_data, train_data, train_unlabeled_data, val_data, test_data, source_test_data
+
+
+def get_udanli_datasets(root_path, task_name, seed, num_common_class, num_nli_sample, source=None, target=None):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source=source, target=target)
+
+    # UNIDA setting
+    # set dataset path
+    if source is None and target is None:
+        data_path = os.path.join(root_path, task_name, f'{seed}_{num_common_class}')
+    else:
+        data_path = os.path.join(root_path, task_name, f'{source}_{target}', f'{seed}_{num_common_class}')
+
+    nli_path = os.path.join(data_path, f'nli_{num_nli_sample}.jsonl')
+    nli_data = load_dataset('json', data_files=nli_path)['train']
+
+    
+    # UNIDA setting
+    # set dataset path
+    dav_path = os.path.join(data_path, f'adv_{num_nli_sample}.jsonl')
+    dav_data = load_dataset('json', data_files=dav_path)['train']
+
+    
+    return nli_data, dav_data, train_data, val_data, test_data, source_test_data

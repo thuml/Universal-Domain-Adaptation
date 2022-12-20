@@ -6,6 +6,7 @@ export CUDA_VISIBLE_DEVICES=2
 seeds='1234 2134 3412 4132'
 # seeds='2134 3412 4132'
 
+seeds='1234'
 num_samples='2'
 
 for seed in  $seeds; do
