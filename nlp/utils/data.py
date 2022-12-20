@@ -214,6 +214,7 @@ def get_udanli_datasets(root_path, task_name, seed, num_common_class, num_nli_sa
         data_path = os.path.join(root_path, task_name, f'{source}_{target}', f'{seed}_{num_common_class}')
 
     nli_path = os.path.join(data_path, f'nli_{num_nli_sample}.jsonl')
+
     nli_data = load_dataset('json', data_files=nli_path)['train']
 
     

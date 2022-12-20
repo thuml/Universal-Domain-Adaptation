@@ -40,9 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 # input keys
-coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
 
-def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_class):
+def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_class, coarse_label, input_key):
     logger.info('Test without threshold.')
     metric = Accuracy()
 
@@ -76,45 +75,6 @@ def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_cla
                 logits = outputs.get('max_logits')
                 logits[predictions != 1] = 0.0
                 predictions = logits.argmax().unsqueeze(dim=0).cuda()
-
-            metric.add_batch(predictions=predictions, references=eval_label)
-    
-    results = metric.compute()
-
-    return results
-
-def test(model, dataloader, tokenizer, selected_samples, labels_set, unknown_class):
-    logger.info('Test without threshold.')
-    metric = HScore(unknown_class)
-
-    model.eval()
-    with torch.no_grad():
-        for test_batch in tqdm(dataloader, desc='testing '):
-            eval_sample = test_batch.get(input_key)[0]
-            eval_label = test_batch.get(coarse_label).cuda()
-            eval_batch = []
-            for candidate_label in labels_set:
-                candidate_sample = selected_samples.get(candidate_label).get(input_key)
-                eval_batch.append([candidate_sample, eval_sample])
-
-            eval_batch = tokenizer(eval_batch, padding=True, return_tensors='pt')
-            eval_batch = {k: v.cuda() for k, v in eval_batch.items()}
-            
-            outputs = model(**eval_batch, is_nli=True)
-
-            # entailment = 1
-            # predictions : (batch, )
-            predictions = outputs['predictions']
-
-            if len(predictions[predictions==1]) == 0:
-                predictions = torch.tensor([unknown_class]).cuda()
-            elif len(predictions[predictions==1]) == 1:
-                predictions = (predictions == 1).nonzero(as_tuple=True)[0].cuda()
-            else:
-                logits = outputs.get('max_logits')
-                logits[predictions != 1] = 0.0
-                predictions = logits.argmax().unsqueeze(dim=0).cuda()
-
 
             metric.add_batch(predictions=predictions, references=eval_label)
     
@@ -236,27 +196,27 @@ def main(args, save_config):
     #################################
 
     # dict() : {class_index : sample_instance}
-    # selected_samples = select_samples(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     source_labels_list = source_labels_list,
-    #     train_data=train_data,
-    #     coarse_label=coarse_label,
-    #     input_key=input_key,
-    #     batch_size=args.train.batch_size,
-    # )
+    selected_samples = select_samples(
+        model=model,
+        tokenizer=tokenizer,
+        source_labels_list = source_labels_list,
+        train_data=train_data,
+        coarse_label=coarse_label,
+        input_key=input_key,
+        batch_size=args.train.batch_size,
+    )
 
-    selected_samples = dict()
-    for source_label in source_labels_list:
-        logger.info(f'select label {source_label}')
-        # pdb.set_trace()
-        filtered_dataset = train_data.filter(lambda sample : sample[coarse_label] == source_label)
-        random_index = random.randint(0, len(filtered_dataset)-1)
-        selected_sample = filtered_dataset[random_index]
-        selected_samples[source_label] = selected_sample
+    # selected_samples = dict()
+    # for source_label in source_labels_list:
+    #     logger.info(f'select label {source_label}')
+    #     # pdb.set_trace()
+    #     filtered_dataset = train_data.filter(lambda sample : sample[coarse_label] == source_label)
+    #     random_index = random.randint(0, len(filtered_dataset)-1)
+    #     selected_sample = filtered_dataset[random_index]
+    #     selected_samples[source_label] = selected_sample
 
-    for selected_label, selected_sample in selected_samples.items():
-        logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
+    # for selected_label, selected_sample in selected_samples.items():
+    #     logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
 
     ## OPTIMIZER & SCHEDULER ##
     optimizer = optim.AdamW(model.parameters(), lr=args.train.lr)
@@ -366,7 +326,7 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = eval(model, eval_dataloader, tokenizer, selected_samples, source_labels_list, unknown_label)
+            results = eval(model, eval_dataloader, tokenizer, selected_samples, source_labels_list, unknown_label, coarse_label, input_key)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
@@ -409,7 +369,7 @@ def main(args, save_config):
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
             
     logger.info('Test model...')
-    results = test(model, test_dataloader, tokenizer, selected_samples, source_labels_list, unknown_label)
+    results = eval(model, test_dataloader, tokenizer, selected_samples, source_labels_list, unknown_label, coarse_label, input_key)
     for k,v in results.items():
         writer.add_scalar(f'test/{k}', v, 0)
 
