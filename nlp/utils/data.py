@@ -215,13 +215,15 @@ def get_udanli_datasets(root_path, task_name, seed, num_common_class, num_nli_sa
 
     nli_path = os.path.join(data_path, f'nli_{num_nli_sample}.jsonl')
 
+    print(f'Loading NLI data from : {nli_path}')
     nli_data = load_dataset('json', data_files=nli_path)['train']
 
     
     # UNIDA setting
     # set dataset path
-    dav_path = os.path.join(data_path, f'adv_{num_nli_sample}.jsonl')
-    dav_data = load_dataset('json', data_files=dav_path)['train']
+    adv_path = os.path.join(data_path, f'adv_{num_nli_sample}.jsonl')
+    print(f'Loading ADV. data from : {adv_path}')
+    adv_data = load_dataset('json', data_files=adv_path)['train']
 
     
-    return nli_data, dav_data, train_data, val_data, test_data, source_test_data
+    return nli_data, adv_data, train_data, val_data, test_data, source_test_data

@@ -64,13 +64,13 @@ def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_cla
             # predictions : (batch, )
             predictions = outputs['predictions']
 
-            # predict as unknown
+            # predict as unknown (all contradiction)
             if len(predictions[predictions==1]) == 0:
                 predictions = torch.tensor([unknown_class]).cuda()
-            # predict single class
+            # predict single class (one entailment)
             elif len(predictions[predictions==1]) == 1:
                 predictions = (predictions == 1).nonzero(as_tuple=True)[0].cuda()
-            # select class with highest logit value
+            # select class with highest logit value (2~ entailments)
             else:
                 logits = outputs.get('max_logits')
                 logits[predictions != 1] = 0.0
@@ -215,8 +215,8 @@ def main(args, save_config):
     #     selected_sample = filtered_dataset[random_index]
     #     selected_samples[source_label] = selected_sample
 
-    # for selected_label, selected_sample in selected_samples.items():
-    #     logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
+    for selected_label, selected_sample in selected_samples.items():
+        logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
 
     ## OPTIMIZER & SCHEDULER ##
     optimizer = optim.AdamW(model.parameters(), lr=args.train.lr)
