@@ -29,4 +29,4 @@ test:
   batch_size: 64
 
 log:
-  output_dir: nlp_log
+  output_dir: /home/heyjoonkim/data/universal_domain_adaptation/
