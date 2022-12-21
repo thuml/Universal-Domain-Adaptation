@@ -36,7 +36,7 @@ cudnn.deterministic = True
 logger = logging.getLogger(__name__)
 
 
-def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
+def cheating_test(model, dataloader, unknown_class, is_cda=False, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
 
@@ -62,8 +62,10 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
                 tmp_predictions = predictions.clone().detach()
                 threshold = thresholds[index]
 
-                unknown = (weight < threshold).squeeze()
-                tmp_predictions[unknown] = unknown_class
+                # predict "unknown" for opda setting
+                if not is_cda:
+                    unknown = (weight < threshold).squeeze()
+                    tmp_predictions[unknown] = unknown_class
 
                 metrics[index].add_batch(
                     predictions=tmp_predictions,
@@ -89,6 +91,28 @@ def cheating_test(model, dataloader, unknown_class, metric_name='total_accuracy'
 
     return best_results
 
+
+def test_for_cda(model, dataloader):
+    metric = Accuracy()
+
+    model.eval()
+    with torch.no_grad():
+        for test_batch in tqdm(dataloader, desc='Testing CDA'):
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            outputs = model(**test_batch)
+
+            # max_logits  : (batch, )
+            # predictions : (batch, )
+            max_logits, predictions = outputs['max_logits'], outputs['predictions']
+
+            metric.add_batch(predictions=predictions, references=labels)
+    
+    results = metric.compute()
+
+    return results
+
 def test_with_threshold(model, dataloader, unknown_class, threshold):
     logger.info(f'Test with threshold {threshold}')
     metric = HScore(unknown_class)
@@ -112,7 +136,7 @@ def test_with_threshold(model, dataloader, unknown_class, threshold):
 
     return results
 
-def eval_with_threshold(model, dataloader, unknown_class, threshold):
+def eval_with_threshold(model, dataloader, is_cda, unknown_class, threshold):
     logger.info(f'Test with threshold {threshold}')
     metric = Accuracy()
 
@@ -126,7 +150,8 @@ def eval_with_threshold(model, dataloader, unknown_class, threshold):
 
             weight, predictions = outputs['max_logits'], outputs['predictions']
 
-            predictions[weight <= threshold] = unknown_class
+            if is_cda:
+                predictions[weight <= threshold] = unknown_class
             
             metric.add_batch(predictions=predictions, references=labels)
     
@@ -348,7 +373,7 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = eval_with_threshold(model, eval_dataloader, unknown_label, args.test.threshold)
+            results = eval_with_threshold(model, eval_dataloader, is_cda, unknown_label, args.test.threshold)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
@@ -390,20 +415,29 @@ def main(args, save_config):
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
             
     logger.info('Test model...')
-    best_threshold = best_results['threshold'] if best_results is not None else args.test.threshold
-    results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
-    for k,v in results.items():
-        writer.add_scalar(f'test/{k}', v, 0)
+    if is_cda:
+        logger.info('TEST ON CDA SETTING.')
+        results = test_for_cda(model, test_dataloader)
+        for k,v in results.items():
+            writer.add_scalar(f'test/{k}', v, 0)
 
-    print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+    else:
+        logger.info('TEST WITH "UNKNOWN" CLASS.')
+        best_threshold = best_results['threshold'] if best_results is not None else args.test.threshold
+        results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
+        for k,v in results.items():
+            writer.add_scalar(f'test/{k}', v, 0)
 
-    # Find optimal threshold from test set (Cheating)
-    # find model with the best h-score
-    results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
-    # write to tensorboard
-    for k,v in results.items():
-        writer.add_scalar(f'test/{k}', v, 1)
-    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT', dict=results)
+        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+
+        # Find optimal threshold from test set (Cheating)
+        # find model with the best h-score
+        results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+        # write to tensorboard
+        for k,v in results.items():
+            writer.add_scalar(f'test/{k}', v, 1)
+        print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT', dict=results)
 
 
     logger.info('Done.')
