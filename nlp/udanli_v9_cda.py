@@ -103,7 +103,7 @@ def main(args, save_config):
     num_source_labels = args.dataset.num_source_class
     num_class = num_source_labels
     unknown_label = num_source_labels
-    logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
+    logger.info(f'Classify {num_source_labels} classes.\n\n')
     
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
