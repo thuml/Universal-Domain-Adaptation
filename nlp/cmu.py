@@ -182,6 +182,11 @@ def main(args, save_config):
     unknown_label = num_source_labels
     logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
+    if args.dataset.num_source_class == args.dataset.num_common_class:
+        is_cda = True
+    else:
+        is_cda = False
+
     
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
