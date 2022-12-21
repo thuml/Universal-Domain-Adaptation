@@ -3,8 +3,8 @@
 export CUDA_VISIBLE_DEVICES=3
 
 
-lrs='1e-5'
-seeds='2134 4132'
+lrs='5e-6'
+seeds='1234 2134 4132'
 
 for seed in  $seeds; do
     for lr in $lrs; do
@@ -12,8 +12,8 @@ for seed in  $seeds; do
     done
 done
 
-lrs='5e-5'
-seeds='1234 3412'
+lrs='1e-5'
+seeds='3412'
 
 for seed in  $seeds; do
     for lr in $lrs; do

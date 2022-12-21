@@ -155,7 +155,7 @@ def main(args, save_config):
     seed_everything(args.train.seed)
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -238,23 +238,6 @@ def main(args, save_config):
 
     logger.info('Loading best model ...')
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
-
-    # # v9-2
-    # logger.info('Select samples closest to the center of the distribution AFTER LOADING TRAINED MODEL.')
-    # selected_samples = select_samples(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     source_labels_list = source_labels_list,
-    #     train_data=train_data,
-    #     coarse_label=coarse_label,
-    #     input_key=input_key,
-    #     batch_size=args.train.batch_size,
-    # )
-
-    # for selected_label, selected_sample in selected_samples.items():
-    #     logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
-
-
             
     logger.info('Test model...')
     results = test(model, test_dataloader, tokenizer, selected_samples, source_labels_list, unknown_label)
