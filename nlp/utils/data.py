@@ -78,12 +78,12 @@ def load_single_dataset(benchmark, task, num_unlabeled):
     assert task in ['books', 'dvd', 'electronics', 'kitchen']
 
     # TODO : customize?
-    # train_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/train.jsonl'
-    # test_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/test.jsonl'
-    # unlabeled_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/unlabeled.jsonl'
-    train_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/train.jsonl'
-    test_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/test.jsonl'
-    unlabeled_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/unlabeled.jsonl'
+    train_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/train.jsonl'
+    test_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/test.jsonl'
+    unlabeled_path = f'/home/heyjoonkim/data/datasets/amazon_multi_domain/{task}/unlabeled.jsonl'
+    # train_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/train.jsonl'
+    # test_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/test.jsonl'
+    # unlabeled_path = f'/home/heyjoonkim/Universal-Domain-Adaptation/data/amazon_multi_domain/{task}/unlabeled.jsonl'
 
     train_data = load_dataset('json', data_files=train_path)['train']
     test_data = load_dataset('json', data_files=test_path)['train']

@@ -1,6 +1,7 @@
 dataset:
   name: amazon # choices are ['massive', 'clinc']
-  root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
   # total 2 class, 2 class common -> CDA setting
   num_common_class: 2
   num_source_class: 2

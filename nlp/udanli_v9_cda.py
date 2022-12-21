@@ -55,7 +55,7 @@ def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_cla
                 candidate_sample = selected_samples.get(candidate_label).get(input_key)
                 eval_batch.append([candidate_sample, eval_sample])
 
-            eval_batch = tokenizer(eval_batch, padding=True, return_tensors='pt')
+            eval_batch = tokenizer(eval_batch, max_length=512, truncation=True, padding=True, return_tensors='pt')
             eval_batch = {k: v.cuda() for k, v in eval_batch.items()}
             
             outputs = model(**eval_batch, is_nli=True)
@@ -246,6 +246,7 @@ def main(args, save_config):
     # ce = nn.CrossEntropyLoss(reduction='none').cuda()
     # bce loss for domain classification
     bce = nn.BCELoss().cuda()
+
 
     if args.train.train:
         logger.info(f'Start Training....')

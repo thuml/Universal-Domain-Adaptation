@@ -1,6 +1,7 @@
 dataset:
   name: clinc # choices are ['office', 'office-home', 'caltech-imagenet', 'visda2017']
-  root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
   # total 10 class, 4 class common -> commonness = 0.4
   num_common_class: 4
   num_source_class: 7

@@ -1,6 +1,7 @@
 dataset:
   name: amazon # choices are ['massive', 'clinc']
-  root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
+  root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
   # total 2 class, 2 class common -> CDA setting
   num_common_class: 2
   num_source_class: 2
@@ -14,7 +15,7 @@ train:
   # train: False              # train model <-> only test model
   train: True                 # train model <-> only test model
   max_length: 512             # max length for tokenizer
-  batch_size: 32         
+  batch_size: 8         
   num_train_epochs: 10        # total training epoch 
   lr: 0.01 
   lr_scheduler_type: linear   # scheduler type
