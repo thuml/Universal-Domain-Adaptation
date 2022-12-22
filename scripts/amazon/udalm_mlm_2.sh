@@ -12,6 +12,6 @@ source='books'
 target='kitchen'
 
 for seed in  $seeds; do
-    python nlp/udalm_mlm.py --config configs/nlp/udalm-amazon-$source-$target.yaml --lr $lr --seed $seed
+    python nlp/udalm_mlm.py --config configs/nlp/udalm-amazon-$source-$target.yaml --lr $lr --seed $seed --batch_size 8
 done
 
