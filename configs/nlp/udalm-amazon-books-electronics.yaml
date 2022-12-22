@@ -19,6 +19,7 @@ train:
   num_train_epochs: 10        # total training epoch 
   lr: 0.01 
   mlm_probability: 0.15       # for mlm pre-training
+  mlm_weight: 0.88            # weight for mlm training
   lr_scheduler_type: linear   # scheduler type
   early_stop: 3               # early stopping epoch
   seed: 1234                  # random seed
