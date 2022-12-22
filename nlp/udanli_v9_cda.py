@@ -86,8 +86,22 @@ def eval(model, dataloader, tokenizer, selected_samples, labels_set, unknown_cla
 def main(args, save_config):
     seed_everything(args.train.seed)
     
-    ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    
+    # amazon reviews data
+    if 'source_domain' in args.dataset:
+        source_domain = args.dataset.source_domain
+        target_domain = args.dataset.target_domain
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli-{args.train.adv_weight}-{args.num_nli_sample}/{source_domain}-{target_domain}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    # clinc, massive, trec
+    else:
+        source_domain = None
+        target_domain = None
+        coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+        ## LOGGINGS ##
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    
+
     
     # init logger
     logger_init(logger, log_dir)
@@ -107,18 +121,8 @@ def main(args, save_config):
     
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
+    tokenizer.truncation_side = 'left'
 
-    # amazon reviews data
-    if 'source_domain' in args.dataset:
-        source_domain = args.dataset.source_domain
-        target_domain = args.dataset.target_domain
-        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
-
-        # clinc, massive, trec
-    else:
-        source_domain = None
-        target_domain = None
-        coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
 
     ## GET DATASETS ##
     nli_data, adv_data, train_data, val_data, test_data, source_test_data = get_udanli_datasets(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, num_nli_sample=args.num_nli_sample, source=source_domain, target=target_domain)

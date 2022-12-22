@@ -21,6 +21,7 @@ from models import (
     dann, 
     ovanet, 
     uan,
+    udalm
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
@@ -38,9 +39,10 @@ METHOD_TO_MODEL = {
     'uan' : uan.UAN,
     'cmu' : cmu.CMU,
     'ovanet' : ovanet.OVANET,
+    'udalm' : udalm.UDALM,
 }
 
-THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu']
+THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu', 'udalm']
 
 # get all maximum logits values for calculating auroc
 def get_all_predictions(model, dataloader, unknown_class):

@@ -108,22 +108,43 @@ export CUDA_VISIBLE_DEVICES=1
 
 
 
-# ovanet
-method='ovanet'
+# # ovanet
+# method='ovanet'
+
+# seed='1234'
+# lr='5e-5'
+# python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
+
+# seed='2134'
+# lr='1e-6'
+# python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+# seed='3412'
+# lr='1e-6'
+# python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
+
+# seed='4132'
+# lr='1e-5'
+# python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+
+
+# udalm
+method='udalm'
 
 seed='1234'
 lr='5e-5'
-python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
+python nlp/evaluation.py --config configs/nlp/udalm-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
 
 seed='2134'
-lr='1e-6'
-python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+lr='5e-5'
+python nlp/evaluation.py --config configs/nlp/udalm-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
 
 seed='3412'
-lr='1e-6'
-python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
+lr='5e-5'
+python nlp/evaluation.py --config configs/nlp/udalm-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
 
 seed='4132'
-lr='1e-5'
-python nlp/evaluation.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+lr='5e-5'
+python nlp/evaluation.py --config configs/nlp/udalm-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
 
