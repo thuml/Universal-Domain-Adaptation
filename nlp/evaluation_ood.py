@@ -42,58 +42,6 @@ METHOD_TO_MODEL = {
     'ovanet' : ovanet.OVANET,
 }
 
-THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu']
-
-# get all maximum logits values for calculating auroc
-def get_all_predictions(model, dataloader, unknown_class):
-    one_hot_labels_list = []
-    labels_list = []
-    predictions_list = []
-    logits_list = []
-    
-    model.eval()
-    with torch.no_grad():
-        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
-
-            test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
-
-            outputs = model(**test_batch)
-
-            predictions, total_logits, max_logits = outputs['predictions'], outputs['logits'], outputs['max_logits']
-
-            # for in-domain <-> adaptable-domain (no unknown class)
-            # shape : (batch, num_source_class)
-            one_hot_label = one_hot(labels, num_classes=unknown_class) if unknown_class not in labels else None
-
-
-            labels_list.append(labels.cpu().detach().numpy())
-            if one_hot_label is not None:
-                one_hot_labels_list.append(one_hot_label.cpu().detach().numpy())
-            predictions_list.append(max_logits.cpu().detach().numpy())
-            logits_list.append(total_logits.cpu().detach().numpy())
-
-    # shape : (num_samples, )
-    # concatenate all predictions and labels
-    labels = np.concatenate(labels_list)
-    one_hot_labels = np.concatenate(one_hot_labels_list) if len(one_hot_labels_list) > 0 else None
-    predictions = np.concatenate(predictions_list)
-    logits = np.concatenate(logits_list)
-
-    return {
-        'labels' : labels,
-        'one_hot_labels' : one_hot_labels,
-        'predictions' : predictions,
-        'logits' : logits,
-    }
-
-
-# calculate auroc
-def calculate_auroc(labels, predictions, unknown_index):
-    fpr, tpr, thresholds = roc_curve(labels, predictions, pos_label=unknown_index)
-    roc_auc = auc(fpr, tpr) * 100
-
-    return roc_auc
 
 def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
@@ -103,8 +51,8 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
 
     print(f'Number of thresholds : {num_thresholds}')
 
-    maha_metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
-    cosine_metrics = copy.deepcopy(maha_metrics)
+    cosine_metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
+    # cosine_metrics = copy.deepcopy(maha_metrics)
 
     class_list = output_dict['all_classes']
 
@@ -119,6 +67,7 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
             embeddings = model(**test_batch, embeddings_only=True)
 
             ## MAHA. DIST ##
+            """
             maha_scores = []
             for class_index in class_list:
                 # shape : (batch, hidden_dim)
@@ -132,6 +81,7 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
             maha_scores = torch.stack(maha_scores, dim=-1)
             # shape : (batch, )
             maha_score, maha_pred = maha_scores.min(-1)
+            """
 
             norm_embeddings = F.normalize(embeddings, dim=-1)
 
@@ -146,16 +96,12 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
 
             # check for best threshold
             for index in range(num_thresholds):
-                tmp_maha_predictions = maha_pred.clone().detach()
                 tmp_cosine_predictions = cosine_pred.clone().detach()
 
                 threshold = thresholds[index]
 
                 unknown = (cosine_score < threshold).squeeze()
                 tmp_cosine_predictions[unknown] = unknown_class
-
-                # unknown = (cosine_score < threshold).squeeze()
-                # tmp_predictions[unknown] = unknown_class
 
                 cosine_metrics[index].add_batch(
                     predictions=tmp_cosine_predictions,
@@ -181,100 +127,6 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
     
 
     return best_results
-
-
-def eval(model, dataloader, unknown_class,):
-    metric = Accuracy()
-
-    model.eval()
-    with torch.no_grad():
-        for test_batch in tqdm(dataloader, desc='testing '):
-            test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
-
-            outputs = model(**test_batch)
-
-            # max_logits  : (batch, )
-            # predictions : (batch, )
-            max_logits, predictions = outputs['max_logits'], outputs['predictions']
-
-            metric.add_batch(predictions=predictions, references=labels)
-    
-    results = metric.compute()
-
-    return results
-
-def eval_with_threshold(model, dataloader, unknown_class, threshold):
-    logger.info(f'Test with threshold {threshold}')
-    metric = Accuracy()
-
-    model.eval()
-    with torch.no_grad():
-        for test_batch in tqdm(dataloader, desc='testing '):
-            test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
-
-            outputs = model(**test_batch)
-
-            # max_logits  : (batch, )
-            # predictions : (batch, )
-            max_logits, predictions = outputs['max_logits'], outputs['predictions']
-
-            # pdb.set_trace()
-            predictions[max_logits < threshold] = unknown_class
-            metric.add_batch(predictions=predictions, references=labels)
-    
-    results = metric.compute()
-    results['threshold'] = threshold
-
-    return results
-
-def test(model, dataloader, unknown_class):
-    metric = HScore(unknown_class)
-
-    model.eval()
-    with torch.no_grad():
-        for test_batch in tqdm(dataloader, desc='testing '):
-            test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
-
-            outputs = model(**test_batch)
-
-            # max_logits  : (batch, )
-            # predictions : (batch, )
-            max_logits, predictions = outputs['max_logits'], outputs['predictions']
-
-            # pdb.set_trace()
-            metric.add_batch(predictions=predictions, references=labels)
-    
-    results = metric.compute()
-
-    return results
-
-def test_with_threshold(model, dataloader, unknown_class, threshold):
-    logger.info(f'Test with threshold {threshold}')
-    metric = HScore(unknown_class)
-
-    model.eval()
-    with torch.no_grad():
-        for test_batch in tqdm(dataloader, desc='testing '):
-            test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
-
-            outputs = model(**test_batch)
-
-            # max_logits  : (batch, )
-            # predictions : (batch, )
-            max_logits, predictions = outputs['max_logits'], outputs['predictions']
-
-            # pdb.set_trace()
-            predictions[max_logits < threshold] = unknown_class
-            metric.add_batch(predictions=predictions, references=labels)
-    
-    results = metric.compute()
-    results['threshold'] = threshold
-
-    return results
 
 def prepare_ood(model, dataloader=None):
     bank = None
@@ -333,8 +185,6 @@ def main(args, save_config):
     seed_everything(args.train.seed)
 
     assert args.method_name in METHOD_TO_MODEL.keys()
-
-    thresholding = True if args.method_name in THRESHOLDING_METHODS else False
     
     ## LOGGINGS ##
     log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
@@ -395,6 +245,12 @@ def main(args, save_config):
 
     pdb.set_trace()
 
+    # write to tensorboard
+    for k,v in best_results.items():
+        writer.add_scalar(f'test/cosine_{k}', v, 1)
+    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
+
+    logger.info('Done.')
 
 
 

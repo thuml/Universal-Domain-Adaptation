@@ -9,5 +9,37 @@ method='fine_tuning'
 
 seed='1234'
 lr='5e-5'
-threshold='0.53'
-python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='2134'
+lr='1e-6'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='3412'
+lr='1e-6'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='4132'
+lr='1e-4'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+
+# dann
+method='dann'
+
+
+seed='1234'
+lr='1e-4'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='2134'
+lr='5e-6'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='3412'
+lr='5e-6'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='4132'
+lr='5e-5'
+python nlp/evaluation_ood.py --config configs/nlp/fine_tuning-clinc-opda.yaml --method_name $method --lr $lr --seed $seed
