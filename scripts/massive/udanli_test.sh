@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 
 # lrs='5e-5 1e-5 5e-6'

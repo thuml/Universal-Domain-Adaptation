@@ -74,6 +74,7 @@ class UAN(nn.Module):
         attention_mask=None,
         position_ids=None,
         labels=None,
+        embeddings_only=False,
         **kwargs,
     ):
         outputs = self.model(
@@ -87,6 +88,9 @@ class UAN(nn.Module):
 
         # shape : (batch, hidden_dim)
         cls_state = last_hidden_state[:, 0, :]
+
+        if embeddings_only:
+            return cls_state
         
         # cls_state         : (batch, hidden_dim)
         # after_bottlenack  : (batch, 256)

@@ -72,6 +72,7 @@ class DANN(nn.Module):
         attention_mask=None,
         position_ids=None,
         labels=None,
+        embeddings_only=False,
         **kwargs,
     ):
         
@@ -86,6 +87,9 @@ class DANN(nn.Module):
 
         # shape : (batch, hidden_dim)
         cls_state = last_hidden_state[:, 0, :]
+
+        if embeddings_only:
+            return cls_state
 
         # shape : (batch, num_class)
         classification_output = self.classifier(cls_state)

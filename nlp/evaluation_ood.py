@@ -93,7 +93,6 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
             cosine_score, max_indices = cosine_scores.max(-1)
             cosine_pred = output_dict['label_bank'][max_indices]
 
-
             # check for best threshold
             for index in range(num_thresholds):
                 tmp_cosine_predictions = cosine_pred.clone().detach()
@@ -243,11 +242,6 @@ def main(args, save_config):
 
     best_results = cheating_test(model, test_dataloader, output_dict, unknown_label, metric_name='h_score', start=0.0, end=1.0, step=0.005)
 
-    pdb.set_trace()
-
-    # write to tensorboard
-    for k,v in best_results.items():
-        writer.add_scalar(f'test/cosine_{k}', v, 1)
     print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
 
     logger.info('Done.')
