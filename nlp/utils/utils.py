@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument('--threshold', type=float, default=None, help='Custom threshold.')
     parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
     parser.add_argument('--method_name', type=str, default=None, help='method name to evaluate')
+    parser.add_argument('--batch_size', type=int, default=None, help='batch_size')
     # for generating dataset
     parser.add_argument('--num_nli_sample', type=int, default=None, help='number of samples for entailment / contradiction')
 
@@ -32,6 +33,7 @@ def parse_args():
     seed = args.seed
     method_name = args.method_name
     threshold = args.threshold
+    batch_size = args.batch_size
     # for dataset generation
     num_nli_sample = args.num_nli_sample
 
@@ -52,5 +54,7 @@ def parse_args():
         args.test.threshold = threshold
     if num_nli_sample is not None:
         args.num_nli_sample = num_nli_sample
+    if batch_size is not None:
+        args.train.bath_size = batch_size
 
     return args, save_config

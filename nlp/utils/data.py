@@ -124,7 +124,7 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
     # input keys
     coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
 
-     # default tokenizing function
+    # default tokenizing function
     def preprocess_function(examples):
         texts = (examples[input_key],)
         result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True)
