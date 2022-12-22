@@ -1,5 +1,5 @@
 dataset:
-  name: amazon 
+  name: amazon
   # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
   root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
   num_common_class: 2
@@ -20,12 +20,9 @@ train:
   lr_scheduler_type: linear   # scheduler type
   early_stop: 3               # early stopping epoch
   seed: 1234                  # random seed
+  multi: 0.1                  # loss weight
 
 test:
-  min_threshold: -1.0
-  max_threshold: 1.0
-  step: 0.01
-  threshold: -0.5
   batch_size: 64
 
 log:

@@ -163,8 +163,19 @@ def eval_with_threshold(model, dataloader, is_cda, unknown_class, threshold):
 def main(args, save_config):
     seed_everything(args.train.seed)
     
-    ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/cmu/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    # amazon reviews data
+    if 'source_domain' in args.dataset:
+        source_domain = args.dataset.source_domain
+        target_domain = args.dataset.target_domain
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/cmu/{source_domain}-{target_domain}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    # clinc, massive, trec
+    else:
+        source_domain = None
+        target_domain = None
+        coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+        ## LOGGINGS ##
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/cmu/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -192,7 +203,7 @@ def main(args, save_config):
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATALOADER ##
-    train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.train.batch_size, max_length=args.train.max_length)
+    train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.train.batch_size, max_length=args.train.max_length, source=source_domain, target=target_domain)
 
     num_step_per_epoch = max(len(train_dataloader), len(train_unlabeled_dataloader))
     total_step = args.train.num_train_epochs * num_step_per_epoch

@@ -71,6 +71,7 @@ class OVANET(nn.Module):
         attention_mask=None,
         position_ids=None,
         labels=None,
+        embeddings_only=False,
         **kwargs,
     ):
 
@@ -86,6 +87,9 @@ class OVANET(nn.Module):
 
         # shape : (batch, hidden_dim)
         cls_state = last_hidden_state[:, 0, :]
+
+        if embeddings_only:
+            return cls_state
         
         # shape : (batch, num_source_class)
         out = self.C1(cls_state)

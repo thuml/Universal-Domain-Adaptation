@@ -27,8 +27,15 @@ seeds='1234 2134 3412 4132'
 #     done
 # done
 
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/udanli_v9-1.py --config configs/nlp/udanli-massive-opda_0.8.yaml --lr $lr --seed $seed --num_nli_sample 4
+#     done
+# done
+
+
 for seed in  $seeds; do
     for lr in $lrs; do
-        python nlp/udanli_v9-1.py --config configs/nlp/udanli-massive-opda_0.8.yaml --lr $lr --seed $seed --num_nli_sample 4
+        python nlp/udanli_v9.py --config configs/nlp/udanli-massive-opda_0.8.yaml --lr $lr --seed $seed --num_nli_sample 4
     done
 done

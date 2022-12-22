@@ -113,9 +113,9 @@ def load_dataset_for_da(
     return source_train, source_eval, source_test, target_test, target_unlabeled
 
 
-def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length):
+def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length, source=None, target=None):
     ## LOAD DATASETS ##
-    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class)
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
     
     print('# Data per split :')
     print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
@@ -123,6 +123,9 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
     
     # input keys
     coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+
+    if source is not None and target is not None:
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
 
     # default tokenizing function
     def preprocess_function(examples):

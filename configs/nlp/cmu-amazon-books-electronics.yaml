@@ -1,11 +1,11 @@
 dataset:
-  name: amazon 
+  name: amazon
   # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/ # /path/to/dataset/root
   root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
   num_common_class: 2
   num_source_class: 2
   source_domain: books
-  target_domain: dvd
+  target_domain: electronics
 
 model:
   model_name_or_path: bert-base-uncased
@@ -22,10 +22,10 @@ train:
   seed: 1234                  # random seed
 
 test:
-  min_threshold: -1.0
+  min_threshold: 0.0
   max_threshold: 1.0
-  step: 0.01
-  threshold: -0.5
+  step: 0.005
+  threshold: 0.5
   batch_size: 64
 
 log:
