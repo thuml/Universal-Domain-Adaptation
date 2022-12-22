@@ -37,10 +37,22 @@ logger = logging.getLogger(__name__)
 
 def main(args, save_config):
     seed_everything(args.train.seed)
+
+    # amazon reviews data
+    if 'source_domain' in args.dataset:
+        source_domain = args.dataset.source_domain
+        target_domain = args.dataset.target_domain
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/{source_domain}-{target_domain}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
-    ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    # clinc, massive, trec
+    else:
+        source_domain = None
+        target_domain = None
+        coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
+            
     # init logger
     logger_init(logger, log_dir)
     # init tensorboard summarywriter
@@ -56,16 +68,7 @@ def main(args, save_config):
     unknown_label = num_source_labels
     logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
-    # amazon reviews data
-    if 'source_domain' in args.dataset:
-        source_domain = args.dataset.source_domain
-        target_domain = args.dataset.target_domain
-        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
-    # clinc, massive, trec
-    else:
-        source_domain = None
-        target_domain = None
-        coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+   
 
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
