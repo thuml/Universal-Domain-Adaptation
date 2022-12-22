@@ -55,6 +55,6 @@ def parse_args():
     if num_nli_sample is not None:
         args.num_nli_sample = num_nli_sample
     if batch_size is not None:
-        args.train.bath_size = batch_size
+        args.train.batch_size = batch_size
 
     return args, save_config

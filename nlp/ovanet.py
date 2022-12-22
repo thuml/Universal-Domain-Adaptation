@@ -126,6 +126,10 @@ def main(args, save_config):
     unknown_label = num_source_labels
     logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
+    if args.dataset.num_source_class == args.dataset.num_common_class:
+        is_cda = True
+    else:
+        is_cda = False
     
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
@@ -321,13 +325,24 @@ def main(args, save_config):
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
             
     logger.info('Test model...')
-    results = test(model, test_dataloader, unknown_label)
-    for k,v in results.items():
-        writer.add_scalar(f'test/{k}', v, 0)
+    if is_cda:
+        logger.info('TEST ON CDA SETTING.')    
+        results = eval(model, test_dataloader)
+        for k,v in results.items():
+            writer.add_scalar(f'test/{k}', v, 0)
 
-    print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
 
-    logger.info('Done.')    
+        logger.info('Done.')    
+    else:
+        logger.info('TEST WITH "UNKNOWN" CLASS.')
+        results = test(model, test_dataloader, unknown_label)
+        for k,v in results.items():
+            writer.add_scalar(f'test/{k}', v, 0)
+
+        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+
+        logger.info('Done.')    
 
 
 if __name__ == "__main__":
