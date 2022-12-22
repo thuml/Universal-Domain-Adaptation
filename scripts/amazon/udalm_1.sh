@@ -13,7 +13,7 @@ target='electronics'
 
 for seed in  $seeds; do
     for lr in $lrs; do
-        python nlp/udalm.py --config configs/nlp/udalm-amazon-$source-$target.yaml --lr $lr --seed $seed --batch_size 8
+        python nlp/udalm.py --config configs/nlp/udalm-amazon-$source-$target.yaml --lr $lr --seed $seed --batch_size 4
     done
 done
 

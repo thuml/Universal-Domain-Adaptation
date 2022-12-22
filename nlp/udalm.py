@@ -240,6 +240,10 @@ def main(args, save_config):
     ## GET DATALOADER ##
     train_data, train_unlabeled_data, eval_data, test_data, source_test_data = get_datasets(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, source=source_domain, target=target_domain)
 
+    n = len(train_data)
+    m = len(train_unlabeled_data)
+    cls_weight = n / (n + m)
+
     # default tokenizing function
     def preprocess_function(examples):
         texts = (examples[input_key],)
@@ -263,10 +267,10 @@ def main(args, save_config):
         remove_columns=train_unlabeled_data.column_names,
         desc="Running tokenizer on source train dataset",
     )
-    eval_dataset = val_data.map(
+    eval_dataset = eval_data.map(
         preprocess_function,
         batched=True,
-        remove_columns=val_data.column_names,
+        remove_columns=eval_data.column_names,
         desc="Running tokenizer on source eval dataset",
     )
     test_dataset = test_data.map(
@@ -331,7 +335,7 @@ def main(args, save_config):
     
     
     global_step = 0
-    best_loss = float('inf')
+    best_acc = -1
 
     # data iter
     source_iter = ForeverDataIterator(train_dataloader)
@@ -343,8 +347,7 @@ def main(args, save_config):
     ## START TRAINING ##
     logger.info(f'Start Training....')
 
-    mlm_weight = args.train.mlm_weight
-    cls_weight = 1 - mlm_weight
+    mlm_weight = 1 - cls_weight
     logger.info(f'TRAIN WITH CLS WEIGHT : {cls_weight},  MLM WEIGHT : {mlm_weight}')
 
     start_time = time.time()
