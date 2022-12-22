@@ -147,7 +147,6 @@ def main(args, save_config):
     for current_epoch in range(1, args.train.num_train_epochs+1):
         model.train()
 
-        epoch_loss = 0
         for current_step in tqdm(range(num_step_per_epoch), desc=f'TRAIN EPOCH {current_epoch}'):
 
             global_step += 1
@@ -183,20 +182,18 @@ def main(args, save_config):
             ####################
 
             loss = ce(target_logits.view(-1, tokenizer.vocab_size), target_labels.view(-1))
-            epoch_loss += loss.detach().cpu()
 
             # write to tensorboard
             writer.add_scalar('train/loss', loss, global_step)
 
-        if epoch_loss < best_loss:
-            best_loss = epoch_loss
-            logger.info('Best loss. Save model.')
-            torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
             
             # backward, optimization
             loss.backward()
             optimizer.step()
             lr_scheduler.step()
+        
+        logger.info(f'Save model at epoch {current_epoch}')
+        torch.save(model.state_dict(), os.path.join(log_dir, 'best.pth'))
 
     
     end_time = time.time()
