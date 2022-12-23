@@ -199,6 +199,7 @@ def main(args, save_config):
     #                               #
     #################################
 
+    # v9-1
     # dict() : {class_index : sample_instance}
     selected_samples = select_samples(
         model=model,
@@ -210,6 +211,7 @@ def main(args, save_config):
         batch_size=args.train.batch_size,
     )
 
+    # # v9
     # selected_samples = dict()
     # for source_label in source_labels_list:
     #     logger.info(f'select label {source_label}')
