@@ -112,14 +112,14 @@ def main(args, save_config):
         source_domain = args.dataset.source_domain
         target_domain = args.dataset.target_domain
         coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
-        log_dir = f'{args.log.output_dir}/{args.dataset.name}/uan/{source_domain}-{target_domain}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/ovanet/{source_domain}-{target_domain}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     # clinc, massive, trec
     else:
         source_domain = None
         target_domain = None
         coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
         ## LOGGINGS ##
-        log_dir = f'{args.log.output_dir}/{args.dataset.name}/uan/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/ovanet/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
 
     # init logger
