@@ -230,3 +230,37 @@ def get_udanli_datasets(root_path, task_name, seed, num_common_class, num_nli_sa
 
     
     return nli_data, adv_data, train_data, val_data, test_data, source_test_data
+
+
+
+def get_udanli_datasets_v10(root_path, task_name, seed, num_common_class, num_nli_sample, source=None, target=None):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source=source, target=target)
+
+    # UNIDA setting
+    # set dataset path
+    if source is None and target is None:
+        data_path = os.path.join(root_path, task_name, f'{seed}_{num_common_class}')
+    else:
+        data_path = os.path.join(root_path, task_name, f'{source}_{target}', f'{seed}_{num_common_class}')
+
+    nli_path = os.path.join(data_path, f'nli_{num_nli_sample}.jsonl')
+
+    print(f'Loading NLI data from : {nli_path}')
+    nli_data = load_dataset('json', data_files=nli_path)['train']
+
+    
+    # UNIDA setting
+    # set dataset path
+    adv_path = os.path.join(data_path, f'adv_{num_nli_sample}.jsonl')
+    print(f'Loading ADV. data from : {adv_path}')
+    adv_data = load_dataset('json', data_files=adv_path)['train']
+
+    # UNIDA setting
+    # set dataset path
+    ent_path = os.path.join(data_path, f'ent_{num_nli_sample}.jsonl')
+    print(f'Loading ent. minimization data from : {ent_path}')
+    ent_data = load_dataset('json', data_files=ent_path)['train']
+
+    
+    return nli_data, adv_data, ent_data, train_data, val_data, test_data, source_test_data
