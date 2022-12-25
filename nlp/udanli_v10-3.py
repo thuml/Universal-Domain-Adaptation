@@ -29,7 +29,7 @@ from models.udanli import UDANLI
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
 from utils.evaluation import HScore, Accuracy
-from utils.data import get_udanli_datasets, ForeverDataIterator
+from utils.data import get_udanli_datasets_v10_1, ForeverDataIterator
 from udanli_utils import select_samples
 
 cudnn.benchmark = True
@@ -38,6 +38,12 @@ cudnn.deterministic = True
 
 logger = logging.getLogger(__name__)
 
+# calculate entropy
+# logits : (batch, 2)
+def get_entropy(logits):
+    # pdb.set_trace()
+    entropy = torch.mean(torch.sum(-logits * torch.log(logits + 1e-8), 1), -1)
+    return entropy
 
 # input keys
 coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
@@ -127,7 +133,7 @@ def main(args, save_config):
     seed_everything(args.train.seed)
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v10-3/udanli-{args.train.adv_weight}-{args.train.ent_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -149,7 +155,7 @@ def main(args, save_config):
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATASETS ##
-    nli_data, adv_data, train_data, val_data, test_data, source_test_data = get_udanli_datasets(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, num_nli_sample=args.num_nli_sample)
+    nli_data, adv_data, ent_data, train_data, val_data, test_data, source_test_data = get_udanli_datasets_v10_1(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, num_nli_sample=args.num_nli_sample)
     
 
     source_labels_list = list(sorted(set(train_data[coarse_label])))
@@ -164,7 +170,8 @@ def main(args, save_config):
         )
         result = tokenizer(*texts, padding=False, max_length=args.train.max_length, truncation=True)
  
-        result["labels"] = examples["label"]
+        if "label" in examples:
+            result["labels"] = examples["label"]
 
         return result
 
@@ -184,12 +191,20 @@ def main(args, save_config):
         desc="Running tokenizer on adversarial dataset",
     )
 
+    ent_dataset = ent_data.map(
+        sentence_pair_preprocess_function,
+        batched=True,
+        remove_columns=ent_data.column_names,
+        desc="Running tokenizer on entropy minimization dataset",
+    )
+
     # data_collator = default_data_collator
     data_collator = DataCollatorWithPadding(tokenizer)
     
     # unused in fine-tuning
     nli_dataloader =  DataLoader(nli_dataset, collate_fn=data_collator, batch_size=args.train.batch_size, shuffle=True)
     adv_dataloader =  DataLoader(adv_dataset, collate_fn=data_collator, batch_size=args.train.batch_size, shuffle=True)
+    ent_dataloader =  DataLoader(ent_dataset, collate_fn=data_collator, batch_size=args.train.batch_size, shuffle=True)
 
     # tokenize train data on-the-fly
     eval_dataloader = DataLoader(val_data, batch_size=1, shuffle=False)   
@@ -197,7 +212,7 @@ def main(args, save_config):
     source_test_dataloader = DataLoader(source_test_data, batch_size=1, shuffle=False) 
 
 
-    num_step_per_epoch = max(len(adv_dataloader), len(nli_dataloader))
+    num_step_per_epoch = max(len(adv_dataloader), len(nli_dataloader), len(ent_dataloader))
     total_step = args.train.num_train_epochs * num_step_per_epoch
     logger.info(f'Total epoch {args.train.num_train_epochs}, steps per epoch {num_step_per_epoch}, total step {total_step}')
 
@@ -259,6 +274,7 @@ def main(args, save_config):
     # data iter
     nli_iter = ForeverDataIterator(nli_dataloader)
     adv_iter = ForeverDataIterator(adv_dataloader)
+    ent_iter = ForeverDataIterator(ent_dataloader)
 
     # cross-entropy loss for classification
     ce = nn.CrossEntropyLoss().cuda()
@@ -317,10 +333,24 @@ def main(args, save_config):
                 ## compute loss
                 adv_loss = bce(adv_logit, adv_labels.unsqueeze(-1).to(torch.float32))
 
-                               
+                ####################
+                #                  #
+                # ent minimization #
+                #                  #
+                ####################
 
+                ent_batch = next(ent_iter)
+                ent_batch = {k: v.cuda() for k, v in ent_batch.items()}
+
+                ent_output = model(**nli_batch, is_nli=True)
+                ent_logits = ent_output.get('logits')
+
+                # entropy minimization for target domain (sharp distribution)
+                entropy = get_entropy(ent_logits)
+
+                            
                 ## total loss
-                loss = (1-args.train.adv_weight) * nli_loss + args.train.adv_weight * adv_loss
+                loss = nli_loss + args.train.adv_weight * adv_loss + args.train.ent_weight * entropy
                 # loss = nli_loss + (source_adv_loss + target_adv_loss)
 
 
@@ -329,6 +359,7 @@ def main(args, save_config):
                 writer.add_scalar('train/loss', loss, global_step)
                 writer.add_scalar('train/nli_loss', nli_loss, global_step)
                 writer.add_scalar('train/adv_loss', adv_loss, global_step)
+                writer.add_scalar('train/entropy', entropy, global_step)
 
                 # backward, optimization
                 loss.backward()

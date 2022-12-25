@@ -153,8 +153,28 @@ def main(args, save_config):
                 # f.write(f'{sample}\n')
                 f.write(json.dumps(sample, ensure_ascii=False) + '\n')
 
-    """
     output_file = os.path.join(data_path, f'ent_{NUM_ENTAILMENT}.jsonl')
+
+    with open(output_file, 'w') as f:
+        for first_sample in tqdm(train_data, desc='Generating unlabeled target domain samples'):
+            
+            # source-source sample
+            target_count = len(train_unlabeled_data)
+
+            target_indices = random.sample(range(target_count), NUM_ENTAILMENT * 2)
+
+            for target_index in target_indices:
+                target_sample = train_unlabeled_data[target_index]
+
+                sample = {
+                    'text1' : first_sample.get(input_key),
+                    'text2' : target_sample.get(input_key),
+                }
+                
+                f.write(json.dumps(sample, ensure_ascii=False) + '\n')
+
+    """
+    output_file = os.path.join(data_path, f'ent_{NUM_ENTAILMENT}-2.jsonl')
 
     with open(output_file, 'w') as f:
         for first_sample in tqdm(train_unlabeled_data, desc='Generating unlabeled target domain samples'):
@@ -173,8 +193,6 @@ def main(args, save_config):
                 }
                 
                 f.write(json.dumps(sample, ensure_ascii=False) + '\n')
-
-
 
 
 if __name__ == "__main__":
