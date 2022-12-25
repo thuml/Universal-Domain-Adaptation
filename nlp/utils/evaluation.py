@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 
+import torch.nn.functional as F
+
 class HScore():
     def __init__(self, unknown_class_index):
         self.unknown_class_index = unknown_class_index
@@ -92,3 +94,14 @@ class Accuracy:
             'accuracy' : accuracy,
             'num_samples' : self.num_samples
         }
+
+
+# for entropy minimization
+class entropy(torch.nn.Module):
+    def __init__(self):
+        super(entropy, self).__init__()
+
+    def forward(self, x):
+        b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
+        b = -1.0 * b.sum()
+        return b
