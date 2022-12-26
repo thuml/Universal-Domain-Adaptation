@@ -297,3 +297,114 @@ def get_udanli_datasets_v10_1(root_path, task_name, seed, num_common_class, num_
 
     
     return nli_data, adv_data, ent_data, train_data, val_data, test_data, source_test_data
+
+
+
+################
+#              #
+#   For ODA    #
+#              #
+################
+
+
+def get_dataloaders_for_oda(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length, source=None, target=None):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
+    
+    # input keys
+    coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+
+    if source is not None and target is not None:
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
+
+    
+    source_label_set = set(train_data['coarse_label'])
+    target_label_set = set(test_data['coarse_label'])
+    common_classes = list(source_label_set.intersection(target_label_set))
+    unknown_class = list(target_label_set - source_label_set)[0]
+    new_unknown_class = len(common_classes)
+
+    assert len(common_classes) == num_common_class, f'ERROR GENERATING OPDA DATASET : {len(common_classes)} != {num_common_class}'
+
+    print('Filter out source private samples...')
+    # OPDA : no source private samples, only common class samples
+    train_data = train_data.filter(lambda sample : sample[coarse_label] in common_classes)
+    val_data = val_data.filter(lambda sample : sample[coarse_label] in common_classes)
+
+    import pdb
+
+    print('# Data per split :')
+    print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
+    print(f'{len(train_data)} / {len(train_unlabeled_data)} / {len(val_data)} / {len(source_test_data)}  / {len(test_data)}')        
+    
+    # update labels
+    for common_class in common_classes:
+        pass
+
+
+
+    # default tokenizing function
+    def preprocess_function(examples):
+        texts = (examples[input_key],)
+        result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True)
+        
+        if coarse_label in examples:
+            # update common class
+            for new_label_index, common_class in enumerate(common_classes):
+                for i, label in enumerate(examples[coarse_label]):
+                    if label == common_class:
+                        examples[coarse_label][i] = new_label_index
+            # update unknown class
+            if unknown_class in examples[coarse_label]:
+                for i, label in enumerate(examples[coarse_label]):
+                    if label == unknown_class:
+                        examples[coarse_label][i] = new_unknown_class
+
+            result["labels"] = examples[coarse_label]
+
+        return result
+
+    ## TOKENIZE ##
+    # labeled dataset
+    train_dataset = train_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=train_data.column_names,
+        desc="Running tokenizer on source train dataset",
+    )
+    train_unlabeled_dataset = train_unlabeled_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=train_unlabeled_data.column_names,
+        desc="Running tokenizer on source train dataset",
+    )
+    eval_dataset = val_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=val_data.column_names,
+        desc="Running tokenizer on source eval dataset",
+    )
+    test_dataset = test_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=test_data.column_names,
+        desc="Running tokenizer on target test dataset",
+    )
+    source_test_dataset = source_test_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=source_test_data.column_names,
+        desc="Running tokenizer on target test dataset",
+    )
+
+    # data_collator = default_data_collator
+    data_collator = DataCollatorWithPadding(tokenizer)
+    
+    train_dataloader = DataLoader(train_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    # unused in fine-tuning
+    train_unlabeled_dataloader = DataLoader(train_unlabeled_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    eval_dataloader = DataLoader(eval_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False)   
+    test_dataloader = DataLoader(test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
+    source_test_dataloader = DataLoader(source_test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
+    
+    return train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader

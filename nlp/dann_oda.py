@@ -1,11 +1,9 @@
 
-import argparse
 import time
 import logging
 import copy
 import os
 
-import easydict
 import torch
 import yaml
 import numpy as np
@@ -23,18 +21,16 @@ from transformers import (
     get_scheduler,
 )
 
-from models.bert import BERT
+from models.dann import DANN
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
-from utils.evaluation import HScore, Accuracy
-from utils.data import get_dataloaders, ForeverDataIterator
-
+from utils.evaluation import HScore,Accuracy
+from utils.data import get_dataloaders_for_oda, ForeverDataIterator
 cudnn.benchmark = True
 cudnn.deterministic = True
 
 
 logger = logging.getLogger(__name__)
-
 
 def cheating_eval(model, dataloader, unknown_class, is_cda=False, metric_name='accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
@@ -197,16 +193,9 @@ def test_with_threshold(model, dataloader, unknown_class, threshold):
 
 def main(args, save_config):
     seed_everything(args.train.seed)
-    
-    if args.dataset.num_source_class == args.dataset.num_common_class:
-        is_cda = True
-        split = 'cda'
-    else:
-        is_cda = False
-        split = 'opda'
-    
+        
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/fine_tuning/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/dann/oda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -223,20 +212,25 @@ def main(args, save_config):
     unknown_label = num_source_labels
     logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
-
     
+
     ## INIT TOKENIZER ##
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATALOADER ##
-    train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.train.batch_size, max_length=args.train.max_length)
+    train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders_for_oda(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.train.batch_size, max_length=args.train.max_length)
+
+    num_step_per_epoch = max(len(train_dataloader), len(train_unlabeled_dataloader))
+    total_step = args.train.num_train_epochs * num_step_per_epoch
+    logger.info(f'Total epoch {args.train.num_train_epochs}, steps per epoch {num_step_per_epoch}, total step {total_step}')
 
     ## INIT MODEL ##
     logger.info('Init model...')
     start_time = time.time()
-    model = BERT(
+    model = DANN(
         model_name=args.model.model_name_or_path,
-        num_class=num_class
+        num_class=num_class,
+        max_train_step=total_step,
     ).cuda()
     end_time = time.time()
     loading_time = end_time - start_time
@@ -245,12 +239,8 @@ def main(args, save_config):
     logger.info(f'Total number of trained parameters : {num_total_params}')
     ## INIT MODEL ##
 
-    ## OPTIMIZER & SCHEDULER ##
-    # math around the number of training steps.
-    num_step_per_epoch = max(len(train_dataloader), len(train_unlabeled_dataloader))
-    total_step = args.train.num_train_epochs * num_step_per_epoch
-    logger.info(f'Total epoch {args.train.num_train_epochs}, steps per epoch {num_step_per_epoch}, total step {total_step}')
 
+    ## OPTIMIZER & SCHEDULER ##
     optimizer = optim.AdamW(model.parameters(), lr=args.train.lr)
 
     num_warmup_steps = int(total_step * 0.3)
@@ -262,6 +252,7 @@ def main(args, save_config):
     )
     ## OPTIMIZER & SCHEDULER ##
     
+    
     global_step = 0
     best_acc = 0
     best_results = None
@@ -269,11 +260,14 @@ def main(args, save_config):
 
     # data iter
     source_iter = ForeverDataIterator(train_dataloader)
+    target_iter = ForeverDataIterator(train_unlabeled_dataloader)
 
-    # cross-entropy loss for classification
+    # CE-loss for classification
     ce = nn.CrossEntropyLoss().cuda()
-
-
+    # BCE-loss for domain classification
+    bce = nn.BCELoss().cuda()
+    
+    ## START TRAINING ##
     if args.train.train:
         logger.info(f'Start Training....')
         start_time = time.time()
@@ -284,6 +278,7 @@ def main(args, save_config):
             if early_stop_count == args.train.early_stop:
                 logger.info('Early stop. End.')
                 break
+
 
             for current_step in tqdm(range(num_step_per_epoch), desc=f'TRAIN EPOCH {current_epoch}'):
 
@@ -303,27 +298,42 @@ def main(args, save_config):
                 source_batch = {k: v.cuda() for k, v in source_batch.items()}
                 source_labels = source_batch['labels']
 
+                ## target to cuda
+                target_batch = next(target_iter)
+                target_batch = {k: v.cuda() for k, v in target_batch.items()}
+
                 ####################
                 #                  #
                 #   Forward Pass   #
                 #                  #
                 ####################
 
-                outputs = model(**source_batch)
+                source_outputs = model(**source_batch)
+                source_logits = source_outputs['logits']
+                source_domain_output = source_outputs['domain_output']
 
-                # shape : (batch, num_class)
-                logits = outputs['logits']
-                    
+                target_outputs = model(**target_batch)
+                target_domain_output = target_outputs['domain_output']
+
                 ####################
                 #                  #
                 #   Compute Loss   #
                 #                  #
                 ####################
 
-                loss = ce(logits, source_labels)
+                source_adv_loss = bce(source_domain_output, torch.ones_like(source_domain_output))
+                target_adv_loss = bce(target_domain_output, torch.zeros_like(target_domain_output))
+                adv_loss = source_adv_loss + target_adv_loss
+
+                ce_loss = ce(source_logits, source_labels)
+
+                # total loss
+                loss = ce_loss + target_adv_loss    
 
                 # write to tensorboard
                 writer.add_scalar('train/loss', loss, global_step)
+                writer.add_scalar('train/ce_loss', ce_loss, global_step)
+                writer.add_scalar('train/adv_loss', adv_loss, global_step)
                 
                 # backward, optimization
                 loss.backward()
@@ -339,7 +349,7 @@ def main(args, save_config):
             logger.info(f'Evaluate model at epoch {current_epoch} ...')
 
             # find optimal threshold from evaluation set (source domain) -> sub-optimal threshold
-            results = cheating_eval(model, eval_dataloader, unknown_label, is_cda, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+            results = cheating_eval(model, eval_dataloader, unknown_label, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
             # write to tensorboard
             for k,v in results.items():
                 writer.add_scalar(f'eval/{k}', v, global_step)
@@ -382,29 +392,22 @@ def main(args, save_config):
     model.load_state_dict(torch.load(os.path.join(log_dir, 'best.pth')))
             
     logger.info('Test model...')
-    if is_cda:
-        logger.info('TEST ON CDA SETTING.')
-        results = test_for_cda(model, test_dataloader)
-        for k,v in results.items():
-            writer.add_scalar(f'test/{k}', v, 0)
 
-        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
-    else:
-        logger.info('TEST WITH "UNKNOWN" CLASS.')
-        best_threshold = best_results['threshold'] if best_results is not None else args.test.threshold
-        results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
-        for k,v in results.items():
-            writer.add_scalar(f'test/{k}', v, 0)
+    logger.info('TEST WITH "UNKNOWN" CLASS.')
+    best_threshold = best_results['threshold'] if best_results is not None else args.test.threshold
+    results = test_with_threshold(model, test_dataloader, unknown_label, best_threshold)
+    for k,v in results.items():
+        writer.add_scalar(f'test/{k}', v, 0)
 
-        print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
+    print_dict(logger, string=f'\n\n** FINAL TARGET DOMAIN TEST RESULT', dict=results)
 
-        # Find optimal threshold from test set (Cheating)
-        # find model with the best h-score
-        results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
-        # write to tensorboard
-        for k,v in results.items():
-            writer.add_scalar(f'test/{k}', v, 1)
-        print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT', dict=results)
+    # Find optimal threshold from test set (Cheating)
+    # find model with the best h-score
+    results = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+    # write to tensorboard
+    for k,v in results.items():
+        writer.add_scalar(f'test/{k}', v, 1)
+    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT', dict=results)
 
 
     logger.info('Done.')

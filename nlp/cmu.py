@@ -162,8 +162,15 @@ def eval_with_threshold(model, dataloader, is_cda, unknown_class, threshold):
 
 def main(args, save_config):
     seed_everything(args.train.seed)
+
+    if args.dataset.num_source_class == args.dataset.num_common_class:
+        is_cda = True
+        split = 'cda'
+    else:
+        is_cda = False
+        split = 'opda'
     
-    # amazon reviews data
+    # amazon reviews data -> always CDA setting
     if 'source_domain' in args.dataset:
         source_domain = args.dataset.source_domain
         target_domain = args.dataset.target_domain
@@ -175,7 +182,7 @@ def main(args, save_config):
         target_domain = None
         coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
         ## LOGGINGS ##
-        log_dir = f'{args.log.output_dir}/{args.dataset.name}/cmu/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/cmu/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -193,10 +200,6 @@ def main(args, save_config):
     unknown_label = num_source_labels
     logger.info(f'Classify {num_source_labels} + 1 = {num_class+1} classes.\n\n')
 
-    if args.dataset.num_source_class == args.dataset.num_common_class:
-        is_cda = True
-    else:
-        is_cda = False
 
     
     ## INIT TOKENIZER ##

@@ -199,10 +199,12 @@ def main(args, save_config):
 
     if args.dataset.num_source_class == args.dataset.num_common_class:
         is_cda = True
+        split = 'cda'
     else:
         is_cda = False
+        split = 'opda'
     
-    # amazon reviews data
+    # amazon reviews data -> always cda
     if 'source_domain' in args.dataset:
         source_domain = args.dataset.source_domain
         target_domain = args.dataset.target_domain
@@ -215,8 +217,8 @@ def main(args, save_config):
         source_domain = None
         target_domain = None
         coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
-        mlm_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/0.0001'
-        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+        mlm_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/{split}/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/0.0001'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)

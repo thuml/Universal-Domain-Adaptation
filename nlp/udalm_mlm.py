@@ -38,6 +38,11 @@ logger = logging.getLogger(__name__)
 def main(args, save_config):
     seed_everything(args.train.seed)
 
+    if args.dataset.num_source_class == args.dataset.num_common_class:
+        split = 'cda'
+    else:
+        split = 'opda'
+
     # amazon reviews data
     if 'source_domain' in args.dataset:
         source_domain = args.dataset.source_domain
@@ -50,7 +55,7 @@ def main(args, save_config):
         source_domain = None
         target_domain = None
         coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
-        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+        log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
             
     # init logger

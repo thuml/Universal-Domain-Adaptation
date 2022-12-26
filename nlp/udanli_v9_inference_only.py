@@ -155,7 +155,7 @@ def main(args, save_config):
     seed_everything(args.train.seed)
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -202,29 +202,29 @@ def main(args, save_config):
 
     
 
-    # v9
-    logger.info('Select random samples.')
-    selected_samples = dict()
-    for source_label in source_labels_list:
-        logger.info(f'select label {source_label}')
-        # pdb.set_trace()
-        filtered_dataset = train_data.filter(lambda sample : sample[coarse_label] == source_label)
-        random_index = random.randint(0, len(filtered_dataset)-1)
-        selected_sample = filtered_dataset[random_index]
-        selected_samples[source_label] = selected_sample
+    # # v9
+    # logger.info('Select random samples.')
+    # selected_samples = dict()
+    # for source_label in source_labels_list:
+    #     logger.info(f'select label {source_label}')
+    #     # pdb.set_trace()
+    #     filtered_dataset = train_data.filter(lambda sample : sample[coarse_label] == source_label)
+    #     random_index = random.randint(0, len(filtered_dataset)-1)
+    #     selected_sample = filtered_dataset[random_index]
+    #     selected_samples[source_label] = selected_sample
 
-    # # v9-1
-    # # dict() : {class_index : sample_instance}
-    # logger.info('Select samples closest to the center of the distribution.')
-    # selected_samples = select_samples(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     source_labels_list = source_labels_list,
-    #     train_data=train_data,
-    #     coarse_label=coarse_label,
-    #     input_key=input_key,
-    #     batch_size=args.train.batch_size,
-    # )
+    # v9-1
+    # dict() : {class_index : sample_instance}
+    logger.info('Select samples closest to the center of the distribution.')
+    selected_samples = select_samples(
+        model=model,
+        tokenizer=tokenizer,
+        source_labels_list = source_labels_list,
+        train_data=train_data,
+        coarse_label=coarse_label,
+        input_key=input_key,
+        batch_size=args.train.batch_size,
+    )
 
     for selected_label, selected_sample in selected_samples.items():
         logger.info(f'SELECTED SAMPLE FOR CLASS {selected_label} : {selected_sample}')
