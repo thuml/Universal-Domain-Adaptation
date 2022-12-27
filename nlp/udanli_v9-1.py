@@ -125,9 +125,15 @@ def test(model, dataloader, tokenizer, selected_samples, labels_set, unknown_cla
 
 def main(args, save_config):
     seed_everything(args.train.seed)
+
+    if args.dataset.num_source_class == args.dataset.num_common_class:
+        split = 'cda'
+    else:
+        split = 'opda'
+
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
