@@ -26,7 +26,7 @@ from models import (
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
 from utils.evaluation import HScore, Accuracy
-from utils.data import get_dataloaders
+from utils.data import get_dataloaders_for_oda
 
 cudnn.benchmark = True
 cudnn.deterministic = True
@@ -57,7 +57,7 @@ def get_all_predictions(model, dataloader, unknown_class):
 
             test_batch = {k: v.cuda() for k, v in test_batch.items()}
             labels = test_batch['labels']
-
+            
             outputs = model(**test_batch)
 
             predictions, total_logits, max_logits = outputs['predictions'], outputs['logits'], outputs['max_logits']
@@ -259,7 +259,7 @@ def main(args, save_config):
     thresholding = True if args.method_name in THRESHOLDING_METHODS else False
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/opda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/oda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -277,7 +277,7 @@ def main(args, save_config):
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATALOADER ##
-    _, _, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.test.batch_size, max_length=args.train.max_length)
+    _, _, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders_for_oda(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.test.batch_size, max_length=args.train.max_length)
 
     unknown_dataset = test_dataloader.dataset.filter(lambda sample: sample['labels'] == unknown_label)
     adaptable_dataset = test_dataloader.dataset.filter(lambda sample: sample['labels'] != unknown_label)
@@ -316,7 +316,7 @@ def main(args, save_config):
     #       Test       #
     #                  #
     ####################
-
+    
     if thresholding:
         # # eval : source eval set
         # results = eval_with_threshold(model, eval_dataloader, unknown_label, args.test.threshold)
@@ -356,6 +356,7 @@ def main(args, save_config):
         # test : target test set
         results = test(model, test_dataloader, unknown_label)
         print_dict(logger, string=f'\n\n** TARGET TEST RESULT', dict=results)
+    
 
 
     #####################
@@ -402,8 +403,8 @@ def main(args, save_config):
 
     logger.info(f'AUROC : IND   <-> UNKNOWN       : {auroc1}')
     logger.info(f'AUROC : ADAPT <-> UNKNOWN       : {auroc2}')
-    logger.info(f'AUROC : IND   <-> UNKNOWN (ovo) : {auroc3}')
-    logger.info(f'AUROC : IND   <-> UNKNOWN (ovr) : {auroc4}')
+    logger.info(f'AUROC : IND   <-> ADAPT   (ovo) : {auroc3}')
+    logger.info(f'AUROC : IND   <-> ADAPT   (ovr) : {auroc4}')
 
     logger.info('Done.')
 

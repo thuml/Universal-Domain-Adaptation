@@ -232,6 +232,7 @@ def get_udanli_datasets(root_path, task_name, seed, num_common_class, num_nli_sa
         # ODA : no source private samples, only common class samples
         train_data = train_data.filter(lambda sample : sample[coarse_label] in common_classes)
         val_data = val_data.filter(lambda sample : sample[coarse_label] in common_classes)
+        source_test_data = source_test_data.filter(lambda sample : sample[coarse_label] in common_classes)
 
         print('# Data per split :')
         print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
@@ -365,20 +366,25 @@ def get_dataloaders_for_oda(tokenizer, root_path, task_name, seed, num_common_cl
     target_label_set = set(test_data['coarse_label'])
     common_classes = list(source_label_set.intersection(target_label_set))
     unknown_class = list(target_label_set - source_label_set)[0]
-    new_unknown_class = len(common_classes)
-
-    assert len(common_classes) == num_common_class, f'ERROR GENERATING OPDA DATASET : {len(common_classes)} != {num_common_class}'
+    new_unknown_class = num_common_class
+    # import pdb
+    # pdb.set_trace()
+    # assert len(common_classes) == num_common_class, f'ERROR GENERATING OPDA DATASET : {len(common_classes)} != {num_common_class}'
 
     print('Filter out source private samples...')
     # ODA : no source private samples, only common class samples
     train_data = train_data.filter(lambda sample : sample[coarse_label] in common_classes)
     val_data = val_data.filter(lambda sample : sample[coarse_label] in common_classes)
+    source_test_data = source_test_data.filter(lambda sample : sample[coarse_label] in common_classes)
 
 
     print('# Data per split :')
     print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
     print(f'{len(train_data)} / {len(train_unlabeled_data)} / {len(val_data)} / {len(source_test_data)}  / {len(test_data)}')        
     
+    # import pdb
+    # pdb.set_trace()
+
     # default tokenizing function
     def preprocess_function(examples):
         texts = (examples[input_key],)
@@ -444,3 +450,51 @@ def get_dataloaders_for_oda(tokenizer, root_path, task_name, seed, num_common_cl
     source_test_dataloader = DataLoader(source_test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
     
     return train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader
+
+
+
+def get_datasets_for_oda(root_path, task_name, seed, num_common_class, source=None, target=None):
+    ## LOAD DATASETS ##
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
+    
+    # input keys
+    coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+    
+    source_label_set = set(train_data[coarse_label])
+    target_label_set = set(test_data[coarse_label])
+    common_classes = sorted(list(source_label_set.intersection(target_label_set)))
+    unknown_class = list(target_label_set - source_label_set)[0]
+    # new_unknown_class = len(common_classes)
+    new_unknown_class = num_common_class
+
+    # mapper : old label -> new label
+    label_mapper = dict()
+    for new_index, common_class in enumerate(common_classes):
+        label_mapper[common_class] = new_index
+    label_mapper[unknown_class] = new_unknown_class
+
+    # assert len(common_classes) == num_common_class, f'ERROR GENERATING OPDA DATASET : {len(common_classes)} != {num_common_class}'
+
+    print('Filter out source private samples...')
+    # ODA : no source private samples, only common class samples
+    train_data = train_data.filter(lambda sample : sample[coarse_label] in common_classes)
+    val_data = val_data.filter(lambda sample : sample[coarse_label] in common_classes)
+    source_test_data = source_test_data.filter(lambda sample : sample[coarse_label] in common_classes)
+
+    print('# Data per split :')
+    print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
+    print(f'{len(train_data)} / {len(train_unlabeled_data)} / {len(val_data)} / {len(source_test_data)}  / {len(test_data)}')        
+    
+
+    def update_labels(sample):
+        if coarse_label in sample:
+            sample[coarse_label] = label_mapper.get(sample[coarse_label])
+        return sample
+    
+    # update label class
+    train_data = train_data.map(update_labels)
+    val_data = val_data.map(update_labels)
+    test_data = test_data.map(update_labels)
+    source_test_data = source_test_data.map(update_labels)
+
+    return train_data, train_unlabeled_data, val_data, test_data, source_test_data

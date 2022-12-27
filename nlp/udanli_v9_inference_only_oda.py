@@ -155,7 +155,7 @@ def main(args, save_config):
     seed_everything(args.train.seed)
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/opda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/udanli_v9-1/udanli-{args.train.adv_weight}-{args.num_nli_sample}/oda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -170,7 +170,7 @@ def main(args, save_config):
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATASETS ##
-    nli_data, adv_data, train_data, val_data, test_data, source_test_data = get_udanli_datasets(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, num_nli_sample=args.num_nli_sample)
+    nli_data, adv_data, train_data, val_data, test_data, source_test_data = get_udanli_datasets(root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, num_nli_sample=args.num_nli_sample, is_opda=False)
     
 
     source_labels_list = list(sorted(set(train_data[coarse_label])))

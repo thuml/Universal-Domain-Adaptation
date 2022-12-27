@@ -17,9 +17,17 @@ lrs='5e-5 1e-5 6e-6'
 # done
 
 
-# OPDA
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/udalm.py --config configs/nlp/udalm-clinc-cda.yaml --lr $lr --seed $seed
+#     done
+# done
+
+
+# ODA
 for seed in  $seeds; do
     for lr in $lrs; do
-        python nlp/udalm.py --config configs/nlp/udalm-clinc-cda.yaml --lr $lr --seed $seed
+        python nlp/udalm_oda.py --config configs/nlp/udalm-clinc-oda.yaml --lr $lr --seed $seed
     done
 done
