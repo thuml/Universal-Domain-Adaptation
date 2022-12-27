@@ -35,48 +35,48 @@ seeds='1234 2134 3412 4132'
 # done
 
 
-# D -> B, E, K
+# # D -> B, E, K
 
-# OPDA
-for seed in  $seeds; do
-    for lr in $lrs; do
-        python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-books.yaml --lr $lr --seed $seed
-    done
-done
-
-
-# OPDA
-for seed in  $seeds; do
-    for lr in $lrs; do
-        python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-electronics.yaml --lr $lr --seed $seed
-    done
-done
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-books.yaml --lr $lr --seed $seed
+#     done
+# done
 
 
-# OPDA
-for seed in  $seeds; do
-    for lr in $lrs; do
-        python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-kitchen.yaml --lr $lr --seed $seed
-    done
-done
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-electronics.yaml --lr $lr --seed $seed
+#     done
+# done
+
+
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/ovanet.py --config configs/nlp/ovanet-amazon-dvd-kitchen.yaml --lr $lr --seed $seed
+#     done
+# done
 
 
 # E -> B, D, K
 
-# OPDA
-for seed in  $seeds; do
-    for lr in $lrs; do
-        python nlp/ovanet.py --config configs/nlp/ovanet-amazon-electronics-books.yaml --lr $lr --seed $seed
-    done
-done
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/ovanet.py --config configs/nlp/ovanet-amazon-electronics-books.yaml --lr $lr --seed $seed
+#     done
+# done
 
 
-# OPDA
-for seed in  $seeds; do
-    for lr in $lrs; do
-        python nlp/ovanet.py --config configs/nlp/ovanet-amazon-electronics-dvd.yaml --lr $lr --seed $seed
-    done
-done
+# # OPDA
+# for seed in  $seeds; do
+#     for lr in $lrs; do
+#         python nlp/ovanet.py --config configs/nlp/ovanet-amazon-electronics-dvd.yaml --lr $lr --seed $seed
+#     done
+# done
 
 
 # OPDA
