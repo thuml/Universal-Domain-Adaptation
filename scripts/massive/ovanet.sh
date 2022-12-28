@@ -23,6 +23,9 @@ seeds='1234 2134 3412 4132'
 
 
 
+lrs='1e-6'
+
+seeds='3412'
 # ODA
 for seed in  $seeds; do
     for lr in $lrs; do

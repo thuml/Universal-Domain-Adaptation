@@ -398,12 +398,12 @@ def main(args, save_config):
     ## in-domain <-> adaptable
     one_hot_labels = np.concatenate([one_hot_source_labels, one_hot_known_labels])
     logits = np.concatenate([source_logits, known_logits])
-    auroc3 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovo') * 100
+    # auroc3 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovo') * 100
     auroc4 = roc_auc_score(y_true=one_hot_labels, y_score=logits, multi_class='ovr') * 100
 
     logger.info(f'AUROC : IND   <-> UNKNOWN       : {auroc1}')
     logger.info(f'AUROC : ADAPT <-> UNKNOWN       : {auroc2}')
-    logger.info(f'AUROC : IND   <-> ADAPT   (ovo) : {auroc3}')
+    # logger.info(f'AUROC : IND   <-> ADAPT   (ovo) : {auroc3}')
     logger.info(f'AUROC : IND   <-> ADAPT   (ovr) : {auroc4}')
 
     logger.info('Done.')
