@@ -217,7 +217,7 @@ def main(args, save_config):
         source_domain = None
         target_domain = None
         coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
-        mlm_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/{split}/mlm/common-class-{args.dataset.num_common_class}/{args.train.seed}/0.0001'
+        mlm_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/mlm/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/0.0001'
         log_dir = f'{args.log.output_dir}/{args.dataset.name}/udalm/{split}/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
