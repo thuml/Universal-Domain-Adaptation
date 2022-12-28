@@ -13,7 +13,7 @@ train:
   # train: False              # train model <-> only test model
   train: True                 # train model <-> only test model
   max_length: 512             # max length for tokenizer
-  batch_size: 64         
+  batch_size: 16         
   num_train_epochs: 10        # total training epoch 
   lr: 0.01 
   mlm_probability: 0.15       # for mlm pre-training
