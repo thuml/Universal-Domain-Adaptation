@@ -8,50 +8,50 @@ export CUDA_VISIBLE_DEVICES=2
 # method='fine_tuning'
 
 # seed='1234'
-# lr='1e-5'
-# threshold='0.345'
-# python nlp/evaluation.py --config configs/nlp/fine_tuning-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# lr='5e-5'
+# threshold='0.90'
+# python nlp/evaluation.py --config configs/nlp/fine_tuning-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='2134'
-# lr='1e-4'
-# threshold='0.51'
-# python nlp/evaluation.py --config configs/nlp/fine_tuning-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# lr='5e-5'
+# threshold='0.63'
+# python nlp/evaluation.py --config configs/nlp/fine_tuning-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='3412'
-# lr='1e-5'
-# threshold='0.545'
-# python nlp/evaluation.py --config configs/nlp/fine_tuning-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# lr='5e-5'
+# threshold='0.69'
+# python nlp/evaluation.py --config configs/nlp/fine_tuning-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='4132'
-# lr='5e-5'
-# threshold='0.59'
-# python nlp/evaluation.py --config configs/nlp/fine_tuning-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# lr='5e-6'
+# threshold='0.5'
+# python nlp/evaluation.py --config configs/nlp/fine_tuning-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 
 
 
-# # dann
-# method='dann'
+# dann
+method='dann'
 
-# seed='1234'
-# lr='5e-5'
-# threshold='0.47'
-# python nlp/evaluation.py --config configs/nlp/dann-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='1234'
+lr='1e-4'
+threshold='0.33'
+python nlp/evaluation.py --config configs/nlp/dann-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='2134'
-# lr='1e-4'
-# threshold='0.625'
-# python nlp/evaluation.py --config configs/nlp/dann-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='2134'
+lr='5e-5'
+threshold='0.27'
+python nlp/evaluation.py --config configs/nlp/dann-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='3412'
-# lr='1e-4'
-# threshold='0.81'
-# python nlp/evaluation.py --config configs/nlp/dann-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='3412'
+lr='1e-5'
+threshold='0.38'
+python nlp/evaluation.py --config configs/nlp/dann-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='4132'
-# lr='5e-5'
-# threshold='0.385'
-# python nlp/evaluation.py --config configs/nlp/dann-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='4132'
+lr='5e-6'
+threshold='0.44'
+python nlp/evaluation.py --config configs/nlp/dann-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 
 
@@ -88,22 +88,22 @@ export CUDA_VISIBLE_DEVICES=2
 # seed='1234'
 # lr='1e-4'
 # threshold='0.5'
-# python nlp/evaluation.py --config configs/nlp/cmu-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# python nlp/evaluation.py --config configs/nlp/cmu-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='2134'
 # lr='5e-5'
 # threshold='0.5'
-# python nlp/evaluation.py --config configs/nlp/cmu-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# python nlp/evaluation.py --config configs/nlp/cmu-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='3412'
 # lr='1e-4'
 # threshold='0.5'
-# python nlp/evaluation.py --config configs/nlp/cmu-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# python nlp/evaluation.py --config configs/nlp/cmu-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='4132'
 # lr='5e-5'
 # threshold='0.5'
-# python nlp/evaluation.py --config configs/nlp/cmu-massive-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+# python nlp/evaluation.py --config configs/nlp/cmu-trec-opda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 
 
@@ -112,38 +112,38 @@ export CUDA_VISIBLE_DEVICES=2
 
 # seed='1234'
 # lr='1e-3'
-# python nlp/evaluation.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/ovanet-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 # seed='2134'
 # lr='5e-5'
-# python nlp/evaluation.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/ovanet-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 # seed='3412'
 # lr='5e-6'
-# python nlp/evaluation.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/ovanet-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 # seed='4132'
 # lr='5e-6'
-# python nlp/evaluation.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/ovanet-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 
 
-# udalm
-method='udalm'
+# # udalm
+# method='udalm'
 
 # seed='1234'
 # lr='5e-5'
-# python nlp/evaluation.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/udalm-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 # seed='2134'
 # lr='5e-5'
-# python nlp/evaluation.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/udalm-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
 # seed='3412'
 # lr='5e-5'
-# python nlp/evaluation.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# python nlp/evaluation.py --config configs/nlp/udalm-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
-seed='4132'
-lr='5e-5'
-python nlp/evaluation.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+# seed='4132'
+# lr='5e-5'
+# python nlp/evaluation.py --config configs/nlp/udalm-trec-opda.yaml --method_name $method --lr $lr --seed $seed
 
