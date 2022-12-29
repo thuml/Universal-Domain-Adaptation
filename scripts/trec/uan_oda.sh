@@ -13,4 +13,4 @@ for seed in  $seeds; do
     done
 done
 
-sh scripts/trec/cmu_oda.sh
+# sh scripts/trec/cmu_oda.sh

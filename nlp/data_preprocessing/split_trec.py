@@ -150,8 +150,16 @@ def main():
     # remove labels from target data
     target_data = target_data.remove_columns([FINE_LABEL, COARSE_LABEL])
 
+
+    # dataset_path = os.path.join(output_dir, f'target_train_unlabeled.jsonl')
+    # target_data.to_json(dataset_path)
+
+    # TODO : match shape
+    train_size = len(train_source_data)
+    selected_traget_data = target_data.train_test_split(test_size=train_size, shuffle=True, seed=args.seed)['test']
+
     dataset_path = os.path.join(output_dir, f'target_train_unlabeled.jsonl')
-    target_data.to_json(dataset_path)
+    selected_traget_data.to_json(dataset_path)
     ## Done TRAIN split ##
 
 
