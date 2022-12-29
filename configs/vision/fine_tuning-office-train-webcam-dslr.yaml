@@ -1,7 +1,8 @@
 data:
   dataset:
     name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
-    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
+    # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
+    root_path: /home/heyjoonkim/data/datasets/office # /path/to/dataset/root
     # office : amazon (0), dslr (1), webcam (2)
     source: 2 # source domain index
     target: 0 # target domain index
