@@ -108,6 +108,13 @@ class DANN(nn.Module):
             'total_logits' : classification_output,
             'max_logits' : max_logits
         }
+
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.base_model(x)
+
+        return feat
     
 
 

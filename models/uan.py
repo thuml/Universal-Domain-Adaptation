@@ -223,3 +223,10 @@ class UAN(nn.Module):
             'total_logits' : predict_prob,
             'max_logits' : target_share_weight.reshape(-1) # for thresholding
         }
+
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.feature_extractor(x)
+
+        return feat

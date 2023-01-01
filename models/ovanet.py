@@ -143,6 +143,13 @@ class OVANET(nn.Module):
             'total_logits' : out_t,
             'max_logits' : pred_unk
         }
+
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.G(x)
+
+        return feat
     
 
 

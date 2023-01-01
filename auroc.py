@@ -1,4 +1,5 @@
 
+import os
 import argparse
 import copy
 import time
@@ -9,16 +10,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import easydict
 import torch
+import torch.nn.functional as F
 import yaml
 from torch.nn.functional import one_hot
 from tqdm import tqdm
 from sklearn.metrics import roc_curve, auc, roc_auc_score
+from sklearn.covariance import LedoitWolf
 
 import torch.backends.cudnn as cudnn
 import pdb
 
 from models import (
-    uan, resnet, ovanet, dann
+    uan, resnet, ovanet, dann, cmu
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
@@ -37,6 +40,7 @@ METHOD_TO_MODEL = {
     'uan' : uan.UAN,
     'ovanet' : ovanet.OVANET,
     'dann' : dann.DANN,
+    'cmu' : cmu.CMU,
 }
 
 
@@ -50,6 +54,7 @@ def parse_args():
     parser.add_argument('--max_threshold', type=float, default=1.0, help='Maximum threshold value.')
     parser.add_argument('--step', type=float, default=0.005, help='Steps for thresholding.')
     parser.add_argument('--method', type=str, default=None, help='Method to evaluate.')
+    parser.add_argument('--seed', type=int, default=1234, help='Random seed.')
 
     tmp_args = parser.parse_args()
     # lr = args.lr
@@ -69,8 +74,129 @@ def parse_args():
     args.max_threshold = tmp_args.max_threshold
     args.method = tmp_args.method
     args.step = tmp_args.step
+    args.seed = tmp_args.seed
 
     return args, save_config
+
+
+
+def cheating_test_for_ood(model, dataloader, output_dict, unknown_class, start=0.0, end=1.0, step=0.005):
+    thresholds = list(np.arange(start, end, step))
+    num_thresholds = len(thresholds)
+
+    metric = HScore(unknown_class)
+
+    print(f'Number of thresholds : {num_thresholds}')
+
+    cosine_metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
+    # cosine_metrics = copy.deepcopy(maha_metrics)
+
+    class_list = output_dict['all_classes']
+
+    model.eval()
+    with torch.no_grad():
+        for i, (im, label) in enumerate(tqdm(dataloader, desc='Testing')):
+            im = im.cuda()
+            label = label.cuda()
+
+            # shape : (batch, hidden_dim)
+            embeddings = model.get_feature(im)
+
+            norm_embeddings = F.normalize(embeddings, dim=-1)
+
+            ## COSINE ##
+            # shape : (batch, hidden_dim) @ (hidden_dim, num_samples) -> (batch, num_samples)
+            cosine_scores = norm_embeddings @ output_dict['norm_bank'].t()
+
+            # shape : (batch, )
+            cosine_score, max_indices = cosine_scores.max(-1)
+            cosine_pred = output_dict['label_bank'][max_indices]
+
+            # check for best threshold
+            for index in range(num_thresholds):
+                tmp_cosine_predictions = cosine_pred.clone().detach()
+
+                threshold = thresholds[index]
+
+                unknown = (cosine_score < threshold).squeeze()
+                tmp_cosine_predictions[unknown] = unknown_class
+
+                cosine_metrics[index].add_batch(
+                    predictions=tmp_cosine_predictions,
+                    references=label
+                )
+
+    best_threshold = 0
+    best_metric = 0
+    best_results = None
+
+    for index in range(num_thresholds):
+        threshold = thresholds[index]
+
+        results = cosine_metrics[index].compute()
+        current_metric = results['h_score'] * 100
+
+        if current_metric >= best_metric:
+            best_metric = current_metric
+            best_threshold = threshold
+            best_results = results
+
+    best_results['threshold'] = best_threshold
+    
+
+    return best_results
+
+def prepare_ood(model, dataloader=None):
+    bank = None
+    label_bank = None
+    model.eval()
+    for i, (im, label)  in tqdm(enumerate(dataloader), desc='Generating training distribution'):
+        im = im.cuda()
+        label = label.cuda()
+
+        # shape : (batch, hidden_dim)
+        pooled = model.get_feature(im)
+
+        if bank is None:
+            bank = pooled.clone().detach()
+            label_bank = label.clone().detach()
+        else:
+            new_bank = pooled.clone().detach()
+            new_label_bank = label.clone().detach()
+            bank = torch.cat([new_bank, bank], dim=0)
+            label_bank = torch.cat([new_label_bank, label_bank], dim=0)
+
+
+    # shape : (num_sample, hidden_dim)
+    norm_bank = F.normalize(bank, dim=-1)
+    # shape : (num_sample, hidden_dim)
+    N, d = bank.size()
+    # shape : (num_class, )
+    all_classes = list(set(label_bank.tolist()))
+    # shape : (num_class, hidden_dim)
+    class_mean = torch.zeros(max(all_classes) + 1, d).cuda()
+
+    for c in all_classes:
+        class_mean[c] = (bank[label_bank == c].mean(0))
+    # shape : (num_class, hidden_dim)
+    centered_bank = (bank - class_mean[label_bank]).detach().cpu().numpy()
+    
+    # precision = EmpiricalCovariance().fit(centered_bank).precision_.astype(np.float32)
+    precision = LedoitWolf().fit(centered_bank).precision_.astype(np.float32)
+    class_var = torch.from_numpy(precision).float().cuda()
+
+    return {
+        # shape : (hidden_dim, hidden_dim)
+        'class_var' : class_var,
+        # shape : (num_class, hidden_dim)
+        'class_mean' : class_mean,
+        # shape : (num_samples, hidden_dim)
+        'norm_bank' : norm_bank,
+        # list of range(0, num_class)
+        'all_classes' : all_classes,
+        # shape : (num_class, )
+        'label_bank' : label_bank,
+    }
 
 def test(model, dataloader, unknown_class):
     metric = HScore(unknown_class)
@@ -163,7 +289,7 @@ def cheating_test(model, dataloader, unknown_class, start=0.0, end=1.0, step=0.0
                     references=label
                 )
     best_threshold = 0
-    best_hscore = 0
+    best_hscore = -1.0
     best_results = None
 
     for index in range(num_thresholds):
@@ -239,7 +365,7 @@ def calculate_auroc(labels, predictions, unknown_index):
 def main(args, save_config):
 
     ## LOGGINGS ##
-    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/{args.method}/{args.train.lr}'
+    log_dir = f'{args.log.root_dir}/{args.data.dataset.name}/{args.data.dataset.source}-{args.data.dataset.target}/{args.method}/{args.seed}/{args.train.lr}'
     # init logger
     logger_init(logger, log_dir)
     ## LOGGINGS ##
@@ -282,7 +408,7 @@ def main(args, save_config):
         # show results with best h-score (cheating)
         logger.info('* Cheating test for best h-score....')
         results, best_threshold, max_logits_list = cheating_test(model, target_test_dl, unknown_class, start=args.min_threshold, end=args.max_threshold, step=args.step)
-        print_dict(logger, string=f'BEST result with threshold {best_threshold}', dict=results)
+        print_dict(logger, string=f'BEST result with MSP THRESHOLDING {best_threshold}', dict=results)
 
         # show results with threshold at 95%
         total_count = len(max_logits_list)
@@ -294,7 +420,7 @@ def main(args, save_config):
         results = test_with_threshold(model, target_test_dl, unknown_class, threshold)
         print_dict(logger, string=f'H-score @ 95 with threshold {threshold}', dict=results)
 
-
+        """
         ## PLOT RESULTS ##
         logger.info('PLOT RESULTS ...')
         plt.plot(list(range(0, total_count)), sorted_logits.cpu().numpy())
@@ -317,7 +443,7 @@ def main(args, save_config):
         plt.ylabel('Threshold')
         plt.legend()
         plt.savefig(os.path.join(log_dir, 'figure.png'))
-        # """
+        """
 
 
     #####################
@@ -370,7 +496,12 @@ def main(args, save_config):
 
 
     
-    ## adaptable <-> unknown
+    output_dict = prepare_ood(model, dataloader=source_train_dl)
+
+    best_results = cheating_test_for_ood(model, target_test_dl, output_dict, unknown_class, start=args.min_threshold, end=args.max_threshold, step=args.step)
+
+    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
+
 
 
     end_time = time.time()

@@ -120,4 +120,11 @@ class ResNet(nn.Module):
             'total_logits' : y,
             'max_logits' : max_logits
         }
+
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.feature_extractor(x)
+
+        return feat
     

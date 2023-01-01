@@ -122,3 +122,30 @@ class CMU(nn.Module):
 
     def forward(self, x):
         pass
+
+        
+    def get_prediction_and_logits(self, x):
+        # shape : (batch, hidden_dim)
+        feat = self.feature_extractor(x)
+
+        feature, __, fc2_s, fc2_s2, fc2_s3, fc2_s4, fc2_s5, predict_prob = self.classifier(feat)
+
+
+        # shape : (batch, )
+        predictions = predict_prob.argmax(dim=-1)
+        # shape : (batch, )
+        max_logits = predict_prob.max(dim=-1).values
+
+
+        return {
+            'predictions' : predictions,
+            'total_logits' : fc2_s,
+            'max_logits' : max_logits
+        }
+
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.feature_extractor(x)
+
+        return feat

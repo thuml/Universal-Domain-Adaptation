@@ -111,21 +111,21 @@ export CUDA_VISIBLE_DEVICES=0
 # ovanet
 method='ovanet'
 
-# seed='1234'
-# lr='1e-6'
-# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
-
-# seed='2134'
-# lr='1e-6'
-# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
-
-seed='3412'
-lr='1e-6'
+seed='1234'
+lr='1e-3'
 python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
 
-# seed='4132'
-# lr='1e-6'
-# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
+seed='2134'
+lr='5e-5'
+python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
+
+seed='3412'
+lr='5e-6'
+python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
+
+seed='4132'
+lr='5e-6'
+python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
 
 
 

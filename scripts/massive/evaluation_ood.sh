@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 
 
 
@@ -84,21 +84,41 @@ export CUDA_VISIBLE_DEVICES=0
 # python nlp/evaluation_ood.py --config configs/nlp/cmu-massive-opda.yaml --method_name $method --lr $lr --seed $seed
 
 
-# udalm
-method='udalm'
+# # udalm
+# method='udalm'
+
+# seed='1234'
+# lr='5e-5'
+# python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+
+# seed='2134'
+# lr='5e-5'
+# python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+
+# seed='3412'
+# lr='5e-5'
+# python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+
+# seed='4132'
+# lr='5e-5'
+# python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+
+
+# ovanet
+method='ovanet'
 
 seed='1234'
-lr='5e-5'
-python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+lr='1e-3'
+python nlp/evaluation_ood.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
 
 seed='2134'
 lr='5e-5'
-python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+python nlp/evaluation_ood.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
 
 seed='3412'
-lr='5e-5'
-python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+lr='5e-6'
+python nlp/evaluation_ood.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
 
 seed='4132'
-lr='5e-5'
-python nlp/evaluation_ood.py --config configs/nlp/udalm-massive-opda.yaml --method_name $method --lr $lr --seed $seed
+lr='5e-6'
+python nlp/evaluation_ood.py --config configs/nlp/ovanet-massive-opda.yaml --method_name $method --lr $lr --seed $seed
