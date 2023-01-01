@@ -106,9 +106,8 @@ class UniOT(nn.Module):
         self.feature_dim = 256
     
         self.feature_extractor = ResNet50Fc()
-        self.classifier = CLS(self.feature_extractor.output_dim, self.num_class, hidden_mlp=2048, feat_dim=self.feature_dim) 
+        self.classifier = CLS(self.feature_extractor.output_dim, self.num_class, hidden_mlp=2048, feat_dim=self.feature_dim, temp=self.temp) 
         self.cluster_head = ProtoCLS(in_dim=self.feature_dim, out_dim=self.K, temp=self.temp)
-
 
 
 

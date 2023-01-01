@@ -14,6 +14,7 @@ lrs='1e-2 5e-3 1e-3 5e-4'
 # target : dslr  (1)
 
 seeds='2134 3412 4132'
+seeds='3412 4132'
 
 for seed in  $seeds; do
     # amazon -> dslr

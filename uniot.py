@@ -112,7 +112,7 @@ def main(args, save_config):
 
     ## LOAD DATASETS ##
     source_classes, target_classes, common_classes, source_private_classes, target_private_classes = get_class_per_split(args)
-    source_train_dl, source_test_dl, target_train_dl, target_test_dl = get_dataloaders(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes, return_id=True)
+    source_train_dl, source_test_dl, target_train_dl, target_test_dl, target_initMQ_dl = get_dataloaders_for_uniot(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
 
     unknown_class = len(source_classes)
     logger.info(f'Select from {source_classes}, Unknown class {target_private_classes} -> {unknown_class}')
@@ -188,8 +188,7 @@ def main(args, save_config):
 
     # CE-loss
     ce = nn.CrossEntropyLoss().cuda()
-    
-    
+        
     current_epoch = 0
     best_hscore = 0
     best_results = None
@@ -210,30 +209,34 @@ def main(args, save_config):
         # image, label, id 
         # im_source     : (batch, w, h)
         # label_source  : (batch, )
-        im_source, label_source, _ = next(source_iter)
-        im_target, _, _  = next(target_iter)
+        im_source, label_source, id_source = next(source_iter)
+        im_target, _, id_target  = next(target_iter)
 
-        # pdb.set_trace()
-
-
+        # to cuda
         label_source = label_source.cuda()
         im_source = im_source.cuda()
         im_target = im_target.cuda()
 
-
+        # Resnet
+        # shape : (batch, 2048)
         feat_s = model.feature_extractor(im_source)
         feat_t = model.feature_extractor(im_target)
 
-
+        # classifier
+        # before_lincls_feat_s : (batch, 256)
+        # after_lincls_t       : (batch, num_source_class)
         before_lincls_feat_s, after_lincls_s = model.classifier(feat_s)
         before_lincls_feat_t, after_lincls_t = model.classifier(feat_t)
 
+        # normalize
         norm_feat_s = F.normalize(before_lincls_feat_s)
         norm_feat_t = F.normalize(before_lincls_feat_t)
 
+        # shape : (batch, K) = (batch, 50)
         after_cluhead_t = model.cluster_head(before_lincls_feat_t)
 
-
+        ## Calculate CE loss
+        loss_cls = ce(after_lincls_s, label_source)
 
         # =====Private Class Discovery=====
         minibatch_size = norm_feat_t.size(0)
@@ -267,6 +270,17 @@ def main(args, save_config):
         anchor_Q = Q_tt_tilde[:minibatch_size, :]
         neighbor_Q = Q_tt_tilde[minibatch_size:2*minibatch_size, :]
 
+        # compute loss_PCD
+        loss_local = 0
+        for i in range(minibatch_size):
+            sub_loss_local = 0
+            sub_loss_local += -torch.sum(neighbor_Q[i,:] * F.log_softmax(after_cluhead_t[i,:]))
+            sub_loss_local += -torch.sum(anchor_Q[i,:] * F.log_softmax(neighbor_output[i,:]))
+            sub_loss_local /= 2
+            loss_local += sub_loss_local
+        loss_local /= minibatch_size
+        loss_global = -torch.mean(torch.sum(anchor_Q * F.log_softmax(after_cluhead_t, dim=1), dim=1))
+        loss_PCD = (loss_global + loss_local) / 2
 
         # https://github.com/changwxx/UniOT-for-UniDA/blob/main/main.py#L149
         # =====Common Class Detection=====
@@ -298,28 +312,12 @@ def main(args, save_config):
             else:
                 loss_CCD = 0
         else:
-            loss_CCD = 0
-        
-        # =====Source Supervision=====      
-        loss_cls = ce(after_lincls_s, label_source)
-
-        # compute loss_PCD
-        loss_local = 0
-        for i in range(minibatch_size):
-            sub_loss_local = 0
-            sub_loss_local += -torch.sum(neighbor_Q[i,:] * F.log_softmax(after_cluhead_t[i,:]))
-            sub_loss_local += -torch.sum(anchor_Q[i,:] * F.log_softmax(neighbor_output[i,:]))
-            sub_loss_local /= 2
-            loss_local += sub_loss_local
-        loss_local /= minibatch_size
-        loss_global = -torch.mean(torch.sum(anchor_Q * F.log_softmax(after_cluhead_t, dim=1), dim=1))
-        loss_PCD = (loss_global + loss_local) / 2
-        
+            loss_CCD = 0       
 
         # total loss
         loss_all = loss_cls + args.train.lam * (loss_PCD + loss_CCD)
 
-
+        ## backward
         with OptimizerManager([opt_sche_feature, opt_sche_cls, opt_sche_cluster]):
             loss_all.backward()
 

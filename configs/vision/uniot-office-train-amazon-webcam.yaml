@@ -1,10 +1,11 @@
 data:
   dataset:
     name: office # choices are ['office', 'officehome', 'caltech-imagenet', 'visda2017']
-    root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
+    # root_path: /home/heyjoonkim/Universal-Domain-Adaptation/data/office # /path/to/dataset/root
+    root_path: /home/heyjoonkim/data/datasets/office # /path/to/dataset/root
     # office : amazon (0), dslr (1), webcam (2)
     source: 0 # source domain index
-    target: 1 # target domain index
+    target: 2 # target domain index
     n_share: 10 # number of classes to be shared
     n_source_private: 10 # number of classes in source private domain
     n_total: 31 # number of classes in total
@@ -24,13 +25,11 @@ train:
   weight_decay: 0.0005
   sgd_momentum: 0.9
   early_stop: 50   # early stopping epoch
-  # K = 50 *office), 150 (office-home), 500 (visda), 1000 (domain net)
   K: 50
   gamma: 0.7
   mu: 0.7
   temp: 0.1
   lam: 0.1
-  # memory size : 2000 (office, office-home), 10000 (visda, domainnet)
   MQ_size: 2000
 
 test:
