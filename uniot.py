@@ -20,7 +20,7 @@ import torch.backends.cudnn as cudnn
 import faiss
 import pdb
 
-from models.uniot import UniOT, MemoryQueue, sinkhorn, adaptive_filling, ubot_CCD
+from models.uniot import UniOT, MemoryQueue, sinkhorn, adaptive_filling, ubot_CCD, ResultsCalculator
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
 from utils.evaluation import HScore
@@ -58,13 +58,30 @@ def parse_args():
 
     return args, save_config
 
+
+# def run_kmeans(L2_feat, ncentroids, init_centroids=None, seed=None, gpu=False, min_points_per_centroid=1):
+#     if seed is None:
+#         seed = int(os.environ['PYTHONHASHSEED'])
+#     dim = L2_feat.shape[1]
+#     kmeans = faiss.Kmeans(d=dim, k=ncentroids, seed=seed, gpu=gpu, niter=20, verbose=False, \
+#                         nredo=5, min_points_per_centroid=min_points_per_centroid, spherical=True)
+#     if torch.is_tensor(L2_feat):
+#         L2_feat = variable_to_numpy(L2_feat)
+#     kmeans.train(L2_feat, init_centroids=init_centroids)
+#     _, pred_centroid = kmeans.index.search(L2_feat, 1)
+#     pred_centroid = np.squeeze(pred_centroid)
+#     return pred_centroid, kmeans.centroids
+
+
 # https://github.com/changwxx/UniOT-for-UniDA/blob/9ba3bad29956c2f170cd82c9dd8cfa3ae2af3dda/eval.py#L27
-def test(model, dataloader, unknown_class, gamma=0.7, beta=None, seed=None, uniformed_index=None):
+def test(model, dataloader, unknown_class, gamma=0.7, beta=None, seed=None, uniformed_index=None, classes_set=None):
     metric = HScore(unknown_class)
 
     model.eval()
     with torch.no_grad():
-        for i, (im, label) in enumerate(dataloader):
+        label_list = []
+        norm_feat_list = []
+        for i, (im, label) in tqdm(enumerate(dataloader), desc='Test Model'):
             im = im.cuda()
             label = label.cuda()
 
@@ -72,24 +89,52 @@ def test(model, dataloader, unknown_class, gamma=0.7, beta=None, seed=None, unif
             before_lincls_feat_t, after_lincls_t = model.classifier(feature)
             norm_feat_t = F.normalize(before_lincls_feat_t)
             
+            label_list.append(label.cpu().data.numpy())
+            norm_feat_list.append(norm_feat_t.cpu().data.numpy())
 
-            # Unbalanced OT
-            source_prototype = model.classifier.ProtoCLS.fc.weight
+        # concatenate list
+        label_list = np.concatenate(label_list)
+        norm_feat_list = np.concatenate(norm_feat_list)
 
-            stopThr = 1e-6
-            # Adaptive filling 
-            # newsim, fake_size = adaptive_filling(torch.from_numpy(norm_feat_t).cuda(), 
-            #                                     source_prototype, gamma, beta, 0, stopThr=stopThr)
-            
-            # norm_feat_t       : (batch, 256)
-            # source_prototype  : (num_class, 256)
-            newsim, fake_size = adaptive_filling(norm_feat_t.cuda(), 
-                                                source_prototype, gamma, beta, 0, stopThr=stopThr)
+        # Unbalanced OT
+        source_prototype = model.classifier.ProtoCLS.fc.weight
 
-            # obtain predict label
-            _, __, pred_label, ___ = ubot_CCD(newsim, beta, fake_size=fake_size, fill_size=0, mode='minibatch', stopThr=stopThr)
-                        
-            metric.add_batch(predictions=pred_label, references=label)
+
+        stopThr = 1e-6
+        # Adaptive filling 
+        # norm_feat_list    : (batch, 256)
+        # source_prototype  : (num_class, 256)
+        newsim, fake_size = adaptive_filling(torch.from_numpy(norm_feat_list).cuda(),
+                                            source_prototype, gamma, beta, 0, stopThr=stopThr)
+
+        # obtain predict label
+        _, __, pred_label, ___ = ubot_CCD(newsim, beta, fake_size=fake_size, fill_size=0, mode='minibatch', stopThr=stopThr)
+                    
+        
+        # # obtain private samples
+        # filter = (lambda x: x in classes_set["tp_classes"])
+        # private_mask = np.zeros((label_list.size,), dtype=bool) 
+        # for i in range(label_list.size):
+        #     if filter(label_list[i]):
+        #         private_mask[i] = True
+        # private_feat = norm_feat_list[private_mask, :]
+        # private_label = label_list[private_mask]
+
+        # # obtain results
+        # ncentroids = len(classes_set["tp_classes"])
+        # private_pred, _ = run_kmeans(private_feat, ncentroids, init_centroids=None, seed=seed, gpu=True)
+        # results = ResultsCalculator(classes_set, label_list, pred_label, private_label, private_pred)
+        # results_dict = {
+        #     'cls_common_acc': results.common_acc_aver,
+        #     'cls_tp_acc': results.tp_acc,
+        #     'tp_nmi': results.tp_nmi,
+        #     'cls_overall_acc': results.overall_acc_aver,
+        #     'h_score': results.h_score,
+        #     'h3_score': results.h3_score
+        # }
+        # return results_dict
+
+        metric.add_batch(predictions=pred_label, references=torch.from_numpy(label_list))
     
     results = metric.compute()
     return results
@@ -112,7 +157,7 @@ def main(args, save_config):
 
     ## LOAD DATASETS ##
     source_classes, target_classes, common_classes, source_private_classes, target_private_classes = get_class_per_split(args)
-    source_train_dl, source_test_dl, target_train_dl, target_test_dl, target_initMQ_dl = get_dataloaders_for_uniot(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
+    source_train_dl, source_test_dl, target_train_dl, target_test_dl, target_initMQ_dl, classes_set = get_dataloaders_for_uniot(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes)
 
     unknown_class = len(source_classes)
     logger.info(f'Select from {source_classes}, Unknown class {target_private_classes} -> {unknown_class}')
@@ -230,7 +275,7 @@ def main(args, save_config):
 
         # normalize
         norm_feat_s = F.normalize(before_lincls_feat_s)
-        norm_feat_t = F.normalize(before_lincls_feat_t)
+        norm_feat_list = F.normalize(before_lincls_feat_t)
 
         # shape : (batch, K) = (batch, 50)
         after_cluhead_t = model.cluster_head(before_lincls_feat_t)
@@ -239,19 +284,19 @@ def main(args, save_config):
         loss_cls = ce(after_lincls_s, label_source)
 
         # =====Private Class Discovery=====
-        minibatch_size = norm_feat_t.size(0)
+        minibatch_size = norm_feat_list.size(0)
 
         # obtain nearest neighbor from memory queue and current mini-batch
-        feat_mat2 = torch.matmul(norm_feat_t, norm_feat_t.t()) / args.train.temp
+        feat_mat2 = torch.matmul(norm_feat_list, norm_feat_list.t()) / args.train.temp
         mask = torch.eye(feat_mat2.size(0), feat_mat2.size(0)).bool().cuda()
         feat_mat2.masked_fill_(mask, -1 / args.train.temp)
 
-        nb_value_tt, nb_feat_tt = memqueue.get_nearest_neighbor(norm_feat_t, id_target.cuda())
+        nb_value_tt, nb_feat_tt = memqueue.get_nearest_neighbor(norm_feat_list, id_target.cuda())
         neighbor_candidate_sim = torch.cat([nb_value_tt.reshape(-1,1), feat_mat2], 1)
         values, indices = torch.max(neighbor_candidate_sim, 1)
-        neighbor_norm_feat = torch.zeros((minibatch_size, norm_feat_t.shape[1])).cuda()
+        neighbor_norm_feat = torch.zeros((minibatch_size, norm_feat_list.shape[1])).cuda()
         for i in range(minibatch_size):
-            neighbor_candidate_feat = torch.cat([nb_feat_tt[i].reshape(1,-1), norm_feat_t], 0)
+            neighbor_candidate_feat = torch.cat([nb_feat_tt[i].reshape(1,-1), norm_feat_list], 0)
             neighbor_norm_feat[i,:] = neighbor_candidate_feat[indices[i],:]
             
         neighbor_output = model.cluster_head(neighbor_norm_feat)
@@ -292,7 +337,7 @@ def main(args, save_config):
             # fill input features with memory queue
             fill_size_uot = n_batch * args.data.dataloader.batch_size
             mqfill_feat_t = memqueue.random_sample(fill_size_uot)
-            ubot_feature_t = torch.cat([mqfill_feat_t, norm_feat_t], 0)
+            ubot_feature_t = torch.cat([mqfill_feat_t, norm_feat_list], 0)
             full_size = ubot_feature_t.size(0)
             
             # Adaptive filling
@@ -326,7 +371,7 @@ def main(args, save_config):
 
         model.classifier.ProtoCLS.weight_norm() # very important for proto-classifier
         model.cluster_head.weight_norm() # very important for proto-classifier
-        memqueue.update_queue(norm_feat_t, id_target.cuda())
+        memqueue.update_queue(norm_feat_list, id_target.cuda())
 
         ####################
         #                  #
@@ -347,15 +392,19 @@ def main(args, save_config):
         #                  #
         ####################
         
-        if global_step % test_interval == 0:
+        if global_step % test_interval == 0 and global_step > 100:
             current_epoch += 1
             logger.info(f'TEST at epoch {current_epoch} ...')
-            results = test(model, target_test_dl, unknown_class, beta=beta)
-            writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
-            writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
-            writer.add_scalar('test/known_test', results['known_accuracy'], global_step)
-            writer.add_scalar('test/unknown_test', results['unknown_accuracy'], global_step)
-            writer.add_scalar('test/hscore_test', results['h_score'], global_step)
+            results = test(model, target_test_dl, unknown_class, beta=beta, classes_set=classes_set)
+            
+            for metric_name, metric_value in results.items():
+                writer.add_scalar(f'test/{metric_name}', metric_value, global_step)
+            
+            # writer.add_scalar('test/mean_acc_test', results['mean_accuracy'], global_step)
+            # writer.add_scalar('test/total_acc_test', results['total_accuracy'], global_step)
+            # writer.add_scalar('test/known_test', results['known_accuracy'], global_step)
+            # writer.add_scalar('test/unknown_test', results['unknown_accuracy'], global_step)
+            # writer.add_scalar('test/hscore_test', results['h_score'], global_step)
 
 
             if results['h_score'] > best_hscore:

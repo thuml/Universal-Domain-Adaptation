@@ -310,19 +310,39 @@ def esem_dataloader(args, source_classes):
 
 def get_dataloaders_for_uniot(args, source_classes, target_classes, common_classes, source_private_classes, target_private_classes):
     
+        
+    # target-private label
+    tp_classes = sorted(set(target_classes) - set(source_classes))
+    # source-private label
+    sp_classes = sorted(set(source_classes) - set(target_classes))
+    # common label
+    common_classes = sorted(set(source_classes) - set(sp_classes))
+
+    classes_set = {
+        'source_classes': source_classes,
+        'target_classes': target_classes,
+        'tp_classes': tp_classes,
+        'sp_classes': sp_classes,
+        'common_classes': common_classes
+    }
+
+    uniformed_index = len(classes_set['source_classes'])
+
     dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
 
     train_transform = Compose([
         Resize(256),
         RandomCrop(224),
         RandomHorizontalFlip(),
-        ToTensor()
+        ToTensor(),
+        Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
     test_transform = Compose([
         Resize(256),
         CenterCrop(224),
-        ToTensor()
+        ToTensor(),
+        Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
     source_train_ds = FileListDataset(list_path=source_file, path_prefix=dataset.prefixes[args.data.dataset.source],
@@ -364,4 +384,4 @@ def get_dataloaders_for_uniot(args, source_classes, target_classes, common_class
     print(f'target test steps  : {len(target_test_dl)}\n\n')
 
 
-    return source_train_dl, source_test_dl, target_train_dl, target_test_dl, target_initMQ_dl
+    return source_train_dl, source_test_dl, target_train_dl, target_test_dl, target_initMQ_dl, classes_set

@@ -4,8 +4,6 @@ export CUDA_VISIBLE_DEVICES=2
 
 seed='1234'
 
-
-
 # ###########################################################################
 # method='fine_tuning'
 
@@ -103,24 +101,53 @@ seed='1234'
 
 
 # ###########################################################################
-method='cmu'
+# method='cmu'
+
+# # amazon -> dslr
+# lr='1e-3'
+# threshold='0.5'
+# python auroc.py --config configs/vision/cmu-office-train-amazon-dslr.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+
+# # amazon -> webcam
+# lr='1e-3'
+# threshold='0.5'
+# python auroc.py --config configs/vision/cmu-office-train-amazon-webcam.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+
+# # dslr -> amazon
+# lr='1e-2'
+# threshold='0.5'
+# python auroc.py --config configs/vision/cmu-office-train-dslr-amazon.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+
+# # dslr -> webcam
+# lr='1e-3'
+# threshold='0.5'
+# python auroc.py --config configs/vision/cmu-office-train-dslr-webcam.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+
+seed='2134'
+
+###########################################################################
+method='ovanet'
 
 # amazon -> dslr
-lr='1e-3'
-threshold='0.5'
-python auroc.py --config configs/vision/cmu-office-train-amazon-dslr.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+lr='5e-4'
+python auroc.py --config configs/vision/ovanet-office-train-amazon-dslr.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
 
 # amazon -> webcam
-lr='1e-3'
-threshold='0.5'
-python auroc.py --config configs/vision/cmu-office-train-amazon-webcam.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+lr='5e-4'
+python auroc.py --config configs/vision/ovanet-office-train-amazon-webcam.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
 
 # dslr -> amazon
 lr='1e-2'
-threshold='0.5'
-python auroc.py --config configs/vision/cmu-office-train-dslr-amazon.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+python auroc.py --config configs/vision/ovanet-office-train-dslr-amazon.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
 
 # dslr -> webcam
-lr='1e-3'
-threshold='0.5'
-python auroc.py --config configs/vision/cmu-office-train-dslr-webcam.yaml --lr $lr --method $method --threshold $threshold --seed $seed --min_threshold 0.0 --max_threshold 1.0 --step 0.02
+lr='1e-2'
+python auroc.py --config configs/vision/ovanet-office-train-dslr-webcam.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
+
+# webcam -> amazon
+lr='1e-2'
+python auroc.py --config configs/vision/ovanet-office-train-webcam-amazon.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
+
+# webcam -> dslr
+lr='5e-3'
+python auroc.py --config configs/vision/ovanet-office-train-webcam-dslr.yaml --lr $lr --method $method --seed $seed --min_threshold -1.0 --max_threshold 1.0 --step 0.02
