@@ -136,7 +136,8 @@ class ResNet50Fc(BaseFeatureExtractor):
     def __init__(self):
         super(ResNet50Fc, self).__init__()
         # init resnet
-        model_resnet = models.resnet50(pretrained=True)
+        # model_resnet = models.resnet50(pretrained=True)
+        model_resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
 
         # pretrain model is used, use ImageNet normalization
         self.normalize = True

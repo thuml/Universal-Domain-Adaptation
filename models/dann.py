@@ -51,7 +51,8 @@ class ResBase(nn.Module):
         self.dim = 2048
         self.top = top
         if option == 'resnet50':
-            model_ft = models.resnet50(pretrained=pret)
+            model_ft = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+
 
         mod = list(model_ft.children())
         mod.pop()

@@ -37,7 +37,8 @@ class ResBase(nn.Module):
         #     model_ft = models.resnet34(pretrained=pret)
         #     self.dim = 512
         if option == 'resnet50':
-            model_ft = models.resnet50(pretrained=pret)
+            model_ft = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+
         # if option == 'resnet101':
         #     model_ft = models.resnet101(pretrained=pret)
         # if option == 'resnet152':

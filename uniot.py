@@ -275,7 +275,7 @@ def main(args, save_config):
 
         # normalize
         norm_feat_s = F.normalize(before_lincls_feat_s)
-        norm_feat_list = F.normalize(before_lincls_feat_t)
+        norm_feat_t = F.normalize(before_lincls_feat_t)
 
         # shape : (batch, K) = (batch, 50)
         after_cluhead_t = model.cluster_head(before_lincls_feat_t)
@@ -284,19 +284,19 @@ def main(args, save_config):
         loss_cls = ce(after_lincls_s, label_source)
 
         # =====Private Class Discovery=====
-        minibatch_size = norm_feat_list.size(0)
+        minibatch_size = norm_feat_t.size(0)
 
         # obtain nearest neighbor from memory queue and current mini-batch
-        feat_mat2 = torch.matmul(norm_feat_list, norm_feat_list.t()) / args.train.temp
+        feat_mat2 = torch.matmul(norm_feat_t, norm_feat_t.t()) / args.train.temp
         mask = torch.eye(feat_mat2.size(0), feat_mat2.size(0)).bool().cuda()
         feat_mat2.masked_fill_(mask, -1 / args.train.temp)
 
-        nb_value_tt, nb_feat_tt = memqueue.get_nearest_neighbor(norm_feat_list, id_target.cuda())
+        nb_value_tt, nb_feat_tt = memqueue.get_nearest_neighbor(norm_feat_t, id_target.cuda())
         neighbor_candidate_sim = torch.cat([nb_value_tt.reshape(-1,1), feat_mat2], 1)
         values, indices = torch.max(neighbor_candidate_sim, 1)
-        neighbor_norm_feat = torch.zeros((minibatch_size, norm_feat_list.shape[1])).cuda()
+        neighbor_norm_feat = torch.zeros((minibatch_size, norm_feat_t.shape[1])).cuda()
         for i in range(minibatch_size):
-            neighbor_candidate_feat = torch.cat([nb_feat_tt[i].reshape(1,-1), norm_feat_list], 0)
+            neighbor_candidate_feat = torch.cat([nb_feat_tt[i].reshape(1,-1), norm_feat_t], 0)
             neighbor_norm_feat[i,:] = neighbor_candidate_feat[indices[i],:]
             
         neighbor_output = model.cluster_head(neighbor_norm_feat)
@@ -337,7 +337,7 @@ def main(args, save_config):
             # fill input features with memory queue
             fill_size_uot = n_batch * args.data.dataloader.batch_size
             mqfill_feat_t = memqueue.random_sample(fill_size_uot)
-            ubot_feature_t = torch.cat([mqfill_feat_t, norm_feat_list], 0)
+            ubot_feature_t = torch.cat([mqfill_feat_t, norm_feat_t], 0)
             full_size = ubot_feature_t.size(0)
             
             # Adaptive filling
@@ -371,7 +371,7 @@ def main(args, save_config):
 
         model.classifier.ProtoCLS.weight_norm() # very important for proto-classifier
         model.cluster_head.weight_norm() # very important for proto-classifier
-        memqueue.update_queue(norm_feat_list, id_target.cuda())
+        memqueue.update_queue(norm_feat_t, id_target.cuda())
 
         ####################
         #                  #

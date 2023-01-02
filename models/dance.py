@@ -28,7 +28,8 @@ class ResBase(nn.Module):
     def __init__(self, option='resnet50', pret=True, unit_size=100):
         super(ResBase, self).__init__()
         self.dim = 2048
-        model_ft = models.resnet50(pretrained=pret)
+        model_ft = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+
         mod = list(model_ft.children())
         mod.pop()
         self.features = nn.Sequential(*mod)
