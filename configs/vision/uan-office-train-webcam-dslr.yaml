@@ -10,7 +10,7 @@ data:
     source: 2 # source domain index
     target: 1 # target domain index
     n_share: 10 # number of classes to be shared
-    n_source_private: 10 # number of classes in source private domain
+    n_source_private: 10 # number of classebns in source private domain
     n_total: 31 # number of classes in total
 
   dataloader:

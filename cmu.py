@@ -171,6 +171,8 @@ def main(args, save_config):
         f.write(yaml.dump(save_config))
     ## LOGGINGS ##
 
+    logger.info(f'ARGS : {args}')
+
 
     ## LOAD DATASETS ##
     source_classes, target_classes, common_classes, source_private_classes, target_private_classes = get_class_per_split(args)

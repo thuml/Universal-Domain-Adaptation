@@ -147,6 +147,7 @@ def test_with_threshold(model, dataloader, output_device, unknown_class, thresho
 def main(args, save_config):
     seed_everything(args.seed)
 
+
     ## GPU SETTINGS ##
     # gpu_ids = select_GPUs(args.misc.gpus)
     gpu_ids = [0]
@@ -165,6 +166,8 @@ def main(args, save_config):
     with open(join(log_dir, 'config.yaml'), 'w') as f:
         f.write(yaml.dump(save_config))
     ## LOGGINGS ##
+
+    logger.info(f'ARGS : {args}')
 
 
     ## LOAD DATASETS ##

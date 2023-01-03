@@ -26,7 +26,7 @@ class ResNet50Fc(BaseFeatureExtractor):
             else:
                 raise Exception('invalid model path!')
         else:
-            self.model_resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+            self.model_resnet = models.resnet50(pretrained=True)
 
         
         model_resnet = self.model_resnet
