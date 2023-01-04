@@ -9,13 +9,15 @@ lrs='5e-2 1e-2 5e-3 1e-3'
 # 2 : webcam
 
 
-seeds='1234 2134 3412 4132'
+# seeds='1234 2134 3412 4132'
+seeds='1234 2134 3412'
+lrs='1e-1'
 
 for seed in  $seeds; do
-    # dslr -> amazon
-    for lr in $lrs; do
-        python uniot.py --config configs/vision/uniot-office-train-dslr-amazon.yaml --lr $lr --seed $seed
-    done
+    # # dslr -> amazon
+    # for lr in $lrs; do
+    #     python uniot.py --config configs/vision/uniot-office-train-dslr-amazon.yaml --lr $lr --seed $seed
+    # done
 
     # dslr -> webcam
     for lr in $lrs; do
