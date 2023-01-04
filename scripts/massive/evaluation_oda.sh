@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 
 
 
@@ -82,8 +82,8 @@ export CUDA_VISIBLE_DEVICES=0
 
 
 
-# # cmu
-# method='cmu'
+# cmu
+method='cmu'
 
 # seed='1234'
 # lr='1e-5'
@@ -95,10 +95,10 @@ export CUDA_VISIBLE_DEVICES=0
 # threshold='0.5'
 # python nlp/evaluation_oda.py --config configs/nlp/cmu-massive-oda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
-# seed='3412'
-# lr=' 1e-4'
-# threshold='0.5'
-# python nlp/evaluation_oda.py --config configs/nlp/cmu-massive-oda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
+seed='3412'
+lr=' 1e-4'
+threshold='0.5'
+python nlp/evaluation_oda.py --config configs/nlp/cmu-massive-oda.yaml --method_name $method --lr $lr --seed $seed --threshold $threshold
 
 # seed='4132'
 # lr='5e-6'
@@ -108,24 +108,24 @@ export CUDA_VISIBLE_DEVICES=0
 
 
 
-# ovanet
-method='ovanet'
+# # ovanet
+# method='ovanet'
 
-seed='1234'
-lr='1e-3'
-python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
+# seed='1234'
+# lr='1e-3'
+# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
 
-seed='2134'
-lr='5e-5'
-python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
+# seed='2134'
+# lr='5e-5'
+# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
 
-seed='3412'
-lr='5e-6'
-python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
+# seed='3412'
+# lr='5e-6'
+# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed 
 
-seed='4132'
-lr='5e-6'
-python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
+# seed='4132'
+# lr='5e-6'
+# python nlp/evaluation_oda.py --config configs/nlp/ovanet-massive-oda.yaml --method_name $method --lr $lr --seed $seed
 
 
 
