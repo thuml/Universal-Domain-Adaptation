@@ -5,7 +5,7 @@ data:
     root_path: /home/heyjoonkim/data/datasets/office # /path/to/dataset/root
     # office : amazon (0), dslr (1), webcam (2)
     source: 2 # source domain index
-    target: 1 # target domain index
+    target: 0 # target domain index
     n_share: 10 # number of classes to be shared
     n_source_private: 10 # number of classes in source private domain
     n_total: 31 # number of classes in total
@@ -20,21 +20,24 @@ model:
   # pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
 
 train:
-  min_step: 20000 # minimum steps to run. run epochs until it exceeds the minStep
+  min_step: 10000 # minimum steps to run. run epochs until it exceeds the minStep
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   weight_decay: 0.0005
-  momentum: 0.9
-  early_stop: 100   # early stopping epoch
+  sgd_momentum: 0.9
+  early_stop: 50   # early stopping epoch
+  K: 50
+  gamma: 0.7
+  mu: 0.7
+  temp: 0.1
+  lam: 0.1
+  MQ_size: 2000
 
 test:
-  test_interval: 500 # interval of two continuous test phase
   test_only: False # test a given model and exit
-  resume_file: '' # model to test
-  threshold: -0.5 # hyper-parameter w_0
+  threshold: 0.5 # hyper-parameter w
 
 misc:
   gpus: 1 # how many GPUs to be used, 0 indicates CPU only
 
 log:
   root_dir: log # the log directory (log directory will be {root_dir}/{method}/time/)
-  log_interval: 10 # steps to log scalars

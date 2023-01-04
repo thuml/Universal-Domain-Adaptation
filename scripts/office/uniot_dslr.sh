@@ -1,7 +1,7 @@
 export CUDA_VISIBLE_DEVICES=3
 
 
-lrs='1e-2 5e-3 1e-3'
+lrs='5e-2 1e-2 5e-3 1e-3'
 
 ## OFFICE ##
 # 0 : amazon

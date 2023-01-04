@@ -138,6 +138,10 @@ class ResNet50Fc(BaseFeatureExtractor):
         # init resnet
         # model_resnet = models.resnet50(pretrained=True)
         model_resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+        
+        
+        # model_resnet = models.resnet50(pretrained=False)
+        # model_resnet.load_state_dict(torch.load('/home/heyjoonkim/data/resnet50.pth'))
 
         # pretrain model is used, use ImageNet normalization
         self.normalize = True

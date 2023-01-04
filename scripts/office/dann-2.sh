@@ -1,6 +1,6 @@
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 
 lrs='1e-2 5e-3 1e-3 5e-4'
@@ -15,22 +15,22 @@ lrs='1e-2 5e-3 1e-3 5e-4'
 
 # seeds='1234 2134 3412 4132'
 
-seeds='2134 3412'
-for seed in $seeds; do
-    # dslr -> webcam
-    for lr in $lrs; do
-        python dann.py --config configs/vision/fine_tuning-office-train-dslr-webcam.yaml --lr $lr --seed $seed
-    done
-done
-
-
-# seeds='1234 2134 3412'
+# seeds='2134 3412'
 # for seed in $seeds; do
-#     # webcam -> dslr
+#     # dslr -> webcam
 #     for lr in $lrs; do
-#         python dann.py --config configs/vision/fine_tuning-office-train-webcam-dslr.yaml --lr $lr --seed $seed
+#         python dann.py --config configs/vision/fine_tuning-office-train-dslr-webcam.yaml --lr $lr --seed $seed
 #     done
 # done
+
+
+seeds='1234 2134 3412'
+for seed in $seeds; do
+    # webcam -> dslr
+    for lr in $lrs; do
+        python dann.py --config configs/vision/dann-office-train-webcam-dslr.yaml --lr $lr --seed $seed
+    done
+done
 
 # for seed in  $seeds; do
 #     # amazon -> dslr
