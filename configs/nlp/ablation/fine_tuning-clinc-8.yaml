@@ -1,0 +1,30 @@
+dataset:
+  name: clinc
+  root_path: /home/heyjoonkim/data/datasets/ # /path/to/dataset/root
+  # total 10 class, 8 class common
+  num_common_class: 8
+  num_source_class: 9
+
+model:
+  model_name_or_path: bert-base-uncased
+
+train:
+  # train: False              # train model <-> only test model
+  train: True                 # train model <-> only test model
+  max_length: 512             # max length for tokenizer
+  batch_size: 64         
+  num_train_epochs: 10        # total training epoch 
+  lr: 0.01 
+  lr_scheduler_type: linear   # scheduler type
+  early_stop: 3               # early stopping epoch
+  seed: 1234                  # random seed
+
+test:
+  min_threshold: 0.0
+  max_threshold: 1.0
+  step: 0.005
+  threshold: 0.0
+  batch_size: 64
+
+log:
+  output_dir: /home/heyjoonkim/data/universal_domain_adaptation/
