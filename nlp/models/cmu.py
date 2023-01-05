@@ -179,6 +179,10 @@ class CMU(nn.Module):
         # shape             : (batch, 1)
         domain_output = self.discriminator(cls_state)
 
+
+        # shape : (batch, )
+        max_logits = predict_prob.max(dim=-1).values
+
         return {
             'predictions' : predictions,
             'logits' : predict_prob,
@@ -187,6 +191,7 @@ class CMU(nn.Module):
             'fc2_3' : fc2_3,
             'fc2_4' : fc2_4,
             'fc2_5' : fc2_5,
-            'max_logits' : weight,
+            # 'max_logits' : weight,
+            'max_logits' : max_logits,
             'domain_output' : domain_output,
         }

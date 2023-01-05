@@ -114,11 +114,13 @@ class UAN(nn.Module):
                                                         class_temperature=1.0)
         
 
+
         return {
             'predictions' : predictions,
             'before_softmax' : before_softmax,
             'logits' : after_softmax,
-            'max_logits' : target_share_weight.reshape(-1),
+            # 'max_logits' : target_share_weight.reshape(-1),
+            'max_logits' : max_logits,
             # from discriminator
             'd' : d,
             # from discriminator_separate
