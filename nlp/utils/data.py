@@ -62,15 +62,15 @@ def load_full_dataset(DATA_PATH, task_name, seed, num_common_class, source=None,
         source_test_data = load_dataset('json', data_files=source_test_path)['train']
     
     # TODO :
-    # def add_index(i, sample):
-    #     sample['index'] = i
-    #     return sample
+    def add_index(sample, i):
+        sample['index'] = i
+        return sample
 
-    # train_data = map(add_index, enumerate(train_data))
-    # train_unlabeled_data = map(add_index, enumerate(train_unlabeled_data))
-    # val_data = map(add_index, enumerate(val_data))
-    # test_data = map(add_index, enumerate(test_data))
-    # source_test_data = map(add_index, enumerate(source_test_data))
+    train_data = train_data.map(add_index, with_indices=True)
+    train_unlabeled_data = train_unlabeled_data.map(add_index, with_indices=True)
+    val_data = train_data.map(add_index, with_indices=True)
+    test_data = test_data.map(add_index, with_indices=True)
+    source_test_data = source_test_data.map(add_index, with_indices=True)
 
     
     return train_data, train_unlabeled_data, val_data, test_data, source_test_data
@@ -125,7 +125,7 @@ def load_dataset_for_da(
     return source_train, source_eval, source_test, target_test, target_unlabeled
 
 
-def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length, source=None, target=None):
+def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length, source=None, target=None, drop_last=False):
     ## LOAD DATASETS ##
     train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
     
@@ -146,6 +146,9 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
         
         if coarse_label in examples:
             result["labels"] = examples[coarse_label]
+
+        if 'index' in examples:
+            result['index'] = examples['index']
 
         return result
 
@@ -185,9 +188,9 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
     # data_collator = default_data_collator
     data_collator = DataCollatorWithPadding(tokenizer)
     
-    train_dataloader = DataLoader(train_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True, drop_last=drop_last)
     # unused in fine-tuning
-    train_unlabeled_dataloader = DataLoader(train_unlabeled_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    train_unlabeled_dataloader = DataLoader(train_unlabeled_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True, drop_last=drop_last)
     eval_dataloader = DataLoader(eval_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False)   
     test_dataloader = DataLoader(test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
     source_test_dataloader = DataLoader(source_test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
