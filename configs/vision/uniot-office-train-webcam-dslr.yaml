@@ -13,14 +13,18 @@ data:
   dataloader:
     class_balance: true #
     data_workers: 3 # how many workers to use for train dataloaders
-    batch_size: 36 # batch_size for source domain and target domain respectively
+    # batch_size: 36 # batch_size for source domain and target domain respectively
+    batch_size: 4 # batch_size for source domain and target domain respectively
 
 model:
   base_model: resnet50 # choices=['resnet50', 'vgg16']
   # pretrained_model: /workspace/fubo/resnet50.pth # /path/to/pretrained/model
 
 train:
-  min_step: 10000 # minimum steps to run. run epochs until it exceeds the minStep
+  # 10000 step from the original paper with batch size 36
+  # we used batch size of 4 (due to GPU size), so we increased the total step to 10000 * 9 = 90000
+  # min_step: 10000 # minimum steps to run. run epochs until it exceeds the minStep
+  min_step: 90000 # minimum steps to run. run epochs until it exceeds the minStep
   lr: 0.001 # learning rate for new layers. learning rate for finetune is 1/10 of lr
   weight_decay: 0.0005
   sgd_momentum: 0.9

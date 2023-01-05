@@ -76,7 +76,8 @@ def parse_args():
 # https://github.com/changwxx/UniOT-for-UniDA/blob/9ba3bad29956c2f170cd82c9dd8cfa3ae2af3dda/eval.py#L27
 def test(model, dataloader, unknown_class, gamma=0.7, beta=None, seed=None, uniformed_index=None, classes_set=None):
     metric = HScore(unknown_class)
-
+    
+    model.train_base_model(False)
     model.eval()
     with torch.no_grad():
         label_list = []
@@ -173,6 +174,8 @@ def main(args, save_config):
     logger.info(f'Done loading model. Total time {loading_time}')
     ## INIT MODEL ##
 
+    logger.info('Setting mode to train')
+    model.train_base_model(True)
 
     ## TEST ONLY ##
     if args.test.test_only:

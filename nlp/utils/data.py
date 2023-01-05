@@ -60,7 +60,19 @@ def load_full_dataset(DATA_PATH, task_name, seed, num_common_class, source=None,
         val_data = load_dataset('json', data_files=val_path)['train']
         test_data = load_dataset('json', data_files=test_path)['train']
         source_test_data = load_dataset('json', data_files=source_test_path)['train']
+    
+    # TODO :
+    # def add_index(i, sample):
+    #     sample['index'] = i
+    #     return sample
 
+    # train_data = map(add_index, enumerate(train_data))
+    # train_unlabeled_data = map(add_index, enumerate(train_unlabeled_data))
+    # val_data = map(add_index, enumerate(val_data))
+    # test_data = map(add_index, enumerate(test_data))
+    # source_test_data = map(add_index, enumerate(source_test_data))
+
+    
     return train_data, train_unlabeled_data, val_data, test_data, source_test_data
 
 

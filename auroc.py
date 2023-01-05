@@ -21,7 +21,7 @@ import torch.backends.cudnn as cudnn
 import pdb
 
 from models import (
-    uan, resnet, ovanet, dann, cmu
+    uan, resnet, ovanet, dann, cmu, uniot
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything
@@ -41,6 +41,7 @@ METHOD_TO_MODEL = {
     'ovanet' : ovanet.OVANET,
     'dann' : dann.DANN,
     'cmu' : cmu.CMU,
+    'uniot' : uniot.UniOT,
 }
 
 

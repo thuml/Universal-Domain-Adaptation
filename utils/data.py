@@ -330,8 +330,23 @@ def get_dataloaders_for_uniot(args, source_classes, target_classes, common_class
 
     dataset, source_domain_name, target_domain_name, source_file, target_file = get_dataset_file(args)
 
+    # train_transform = Compose([
+    #     Resize(256),
+    #     RandomCrop(224),
+    #     RandomHorizontalFlip(),
+    #     ToTensor(),
+    #     Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    # ])
+
+    # test_transform = Compose([
+    #     Resize(256),
+    #     CenterCrop(224),
+    #     ToTensor(),
+    #     Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    # ])
+
     train_transform = Compose([
-        Resize(256),
+        Resize((256, 256)),
         RandomCrop(224),
         RandomHorizontalFlip(),
         ToTensor(),
@@ -339,7 +354,7 @@ def get_dataloaders_for_uniot(args, source_classes, target_classes, common_class
     ])
 
     test_transform = Compose([
-        Resize(256),
+        Resize((256, 256)),
         CenterCrop(224),
         ToTensor(),
         Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])

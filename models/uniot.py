@@ -136,8 +136,8 @@ class ResNet50Fc(BaseFeatureExtractor):
     def __init__(self):
         super(ResNet50Fc, self).__init__()
         # init resnet
-        # model_resnet = models.resnet50(pretrained=True)
-        model_resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+        model_resnet = models.resnet50(pretrained=True)
+        # model_resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
         
         
         # model_resnet = models.resnet50(pretrained=False)
@@ -209,7 +209,33 @@ class UniOT(nn.Module):
         self.feature_extractor = ResNet50Fc()
         self.classifier = CLS(self.feature_extractor.output_dim, self.num_class, hidden_mlp=2048, feat_dim=self.feature_dim, temp=self.temp) 
         self.cluster_head = ProtoCLS(in_dim=self.feature_dim, out_dim=self.K, temp=self.temp)
+    
+    def train_base_model(self, mode):
+        self.feature_extractor.train(mode)
 
+    def get_feature(self, x):
+        
+        # shape : (batch, hidden_dim)
+        feat = self.feature_extractor(x)
+
+        return feat
+    
+    def get_prediction_and_logits(self, x):
+        # feature               : (batch, hidden_dim)
+        # before_lincls_feat_t  : (batch, 256)
+        # predict_prob          : (batch, num_source_label)
+        feature = self.feature_extractor(x)
+        before_lincls_feat_t, predict_prob = self.classifier(feature)
+
+        # shape : (batch, )
+        predictions = predict_prob.argmax(dim=-1)
+        max_logits = predict_prob.max(dim=-1).values
+
+        return {
+            'predictions' : predictions,
+            'total_logits' : predict_prob,
+            'max_logits' : max_logits
+        }
 
 
 class MemoryQueue(nn.Module):

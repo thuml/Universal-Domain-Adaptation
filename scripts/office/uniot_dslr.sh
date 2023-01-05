@@ -1,7 +1,7 @@
 export CUDA_VISIBLE_DEVICES=3
 
 
-lrs='5e-2 1e-2 5e-3 1e-3'
+lrs='1e-1 5e-2 1e-2 5e-3'
 
 ## OFFICE ##
 # 0 : amazon
@@ -11,7 +11,6 @@ lrs='5e-2 1e-2 5e-3 1e-3'
 
 # seeds='1234 2134 3412 4132'
 seeds='1234 2134 3412'
-lrs='1e-1'
 
 for seed in  $seeds; do
     # # dslr -> amazon
@@ -24,3 +23,6 @@ for seed in  $seeds; do
         python uniot.py --config configs/vision/uniot-office-train-dslr-webcam.yaml --lr $lr --seed $seed
     done
 done
+
+
+sh scripts/office/uniot_webcam.sh
