@@ -18,12 +18,12 @@ train:
   early_stop: 3               # early stopping epoch
   seed: 1234                  # random seed
   # from original code
-  K: 30                       # original value = 50
+  K: 20                       # original value = 50
   gamma: 0.7
   mu: 0.7
   temp: 0.1
   lam: 0.1
-  MQ_size: 2000
+  MQ_size: 1000
 
 test:
   min_threshold: 0.0
