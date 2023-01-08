@@ -8,6 +8,7 @@ from transformers import AutoModel
 
 from easydl import *
 
+import ot
 
 class ProtoCLS(nn.Module):
     def __init__(self, in_dim, out_dim, temp=0.05):

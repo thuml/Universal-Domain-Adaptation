@@ -10,7 +10,10 @@ import numpy as np
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import pdb
+# import ot as POT
 import ot
+
+# pdb.set_trace()
 
 from torch import (
     nn,
@@ -46,7 +49,7 @@ def eval(model, dataloader, gamma=0.7, beta=None):
     with torch.no_grad():
         label_list = []
         norm_feat_list = []
-        for test_batch in tqdm(enumerate(dataloader), desc='Test Model'):
+        for i, test_batch in tqdm(enumerate(dataloader), desc='Test Model'):
             test_batch = {k: v.cuda() for k, v in test_batch.items()}
             label = test_batch['labels']
 
@@ -76,7 +79,7 @@ def eval(model, dataloader, gamma=0.7, beta=None):
         _, __, pred_label, ___ = ubot_CCD(newsim, beta, fake_size=fake_size, fill_size=0, mode='minibatch', stopThr=stopThr)
                     
         
-        metric.add_batch(predictions=pred_label, references=torch.from_numpy(label_list))
+        metric.add_batch(predictions=pred_label, references=torch.from_numpy(label_list).cuda())
     
     results = metric.compute()
     return results
@@ -90,7 +93,7 @@ def test(model, dataloader, unknown_class, gamma=0.7, beta=None):
     with torch.no_grad():
         label_list = []
         norm_feat_list = []
-        for test_batch in tqdm(enumerate(dataloader), desc='Test Model'):
+        for i, test_batch in tqdm(enumerate(dataloader), desc='Test Model'):
             test_batch = {k: v.cuda() for k, v in test_batch.items()}
             label = test_batch['labels']
 
@@ -120,7 +123,7 @@ def test(model, dataloader, unknown_class, gamma=0.7, beta=None):
         _, __, pred_label, ___ = ubot_CCD(newsim, beta, fake_size=fake_size, fill_size=0, mode='minibatch', stopThr=stopThr)
                     
         
-        metric.add_batch(predictions=pred_label, references=torch.from_numpy(label_list))
+        metric.add_batch(predictions=pred_label, references=torch.from_numpy(label_list).cuda())
     
     results = metric.compute()
     return results

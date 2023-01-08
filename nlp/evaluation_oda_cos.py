@@ -10,11 +10,8 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import pdb
 
-from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoTokenizer, DataCollatorWithPadding
-from sklearn.metrics import roc_curve, auc, roc_auc_score
+from transformers import AutoTokenizer
 from sklearn.covariance import LedoitWolf
 
 from models import (
@@ -27,8 +24,8 @@ from models import (
 )
 from utils.logging import logger_init, print_dict
 from utils.utils import seed_everything, parse_args
-from utils.evaluation import HScore, Accuracy
-from utils.data import get_dataloaders
+from utils.evaluation import HScore
+from utils.data import get_dataloaders_for_oda
 
 cudnn.benchmark = True
 cudnn.deterministic = True
@@ -54,9 +51,6 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
     print(f'Number of thresholds : {num_thresholds}')
 
     cosine_metrics = [copy.deepcopy(metric) for _ in range(num_thresholds)]
-    # cosine_metrics = copy.deepcopy(maha_metrics)
-
-    class_list = output_dict['all_classes']
 
     model.eval()
     with torch.no_grad():
@@ -68,23 +62,6 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
             # shape : (batch, hidden_dim)
             embeddings = model(**test_batch, embeddings_only=True)
 
-            ## MAHA. DIST ##
-            """
-            maha_scores = []
-            for class_index in class_list:
-                # shape : (batch, hidden_dim)
-                centered_embeddings = embeddings - output_dict['class_mean'][class_index].unsqueeze(0)
-
-                # shape : (batch, batch) -> (batch, 1)
-                maha_score = torch.diag(centered_embeddings @ output_dict['class_var'] @ centered_embeddings.t())
-                maha_scores.append(maha_score)
-
-            # shape : (batch, num_class)
-            maha_scores = torch.stack(maha_scores, dim=-1)
-            # shape : (batch, )
-            maha_score, maha_pred = maha_scores.min(-1)
-            """
-
             norm_embeddings = F.normalize(embeddings, dim=-1)
 
             ## COSINE ##
@@ -94,6 +71,7 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
             # shape : (batch, )
             cosine_score, max_indices = cosine_scores.max(-1)
             cosine_pred = output_dict['label_bank'][max_indices]
+
 
             # check for best threshold
             for index in range(num_thresholds):
@@ -126,7 +104,6 @@ def cheating_test(model, dataloader, output_dict, unknown_class, metric_name='to
 
     best_results['threshold'] = best_threshold
     
-
     return best_results
 
 def prepare_ood(model, dataloader=None):
@@ -182,13 +159,76 @@ def prepare_ood(model, dataloader=None):
     }
 
 
+def test_with_threshold(model, dataloader, output_dict, unknown_class, threshold):
+    logger.info(f'Test with threshold {threshold}')
+  
+    metric = HScore(unknown_class)
+
+    model.eval()
+    with torch.no_grad():
+        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
+
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            # shape : (batch, hidden_dim)
+            embeddings = model(**test_batch, embeddings_only=True)
+
+            norm_embeddings = F.normalize(embeddings, dim=-1)
+
+            ## COSINE ##
+            # shape : (batch, hidden_dim) @ (hidden_dim, num_samples) -> (batch, num_samples)
+            cosine_scores = norm_embeddings @ output_dict['norm_bank'].t()
+
+            # shape : (batch, )
+            cosine_score, max_indices = cosine_scores.max(-1)
+            cosine_pred = output_dict['label_bank'][max_indices]
+
+            cosine_pred[cosine_score < threshold] = unknown_class
+
+            metric.add_batch(predictions=cosine_pred, references=labels)
+
+    results = metric.compute()
+    results['threshold'] = threshold
+
+    return results
+
+
+def get_cosine_scores(model, dataloader, output_dict):
+    max_cosine_list = []
+
+    model.eval()
+    with torch.no_grad():
+        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
+
+            test_batch = {k: v.cuda() for k, v in test_batch.items()}
+            labels = test_batch['labels']
+
+            # shape : (batch, hidden_dim)
+            embeddings = model(**test_batch, embeddings_only=True)
+
+            norm_embeddings = F.normalize(embeddings, dim=-1)
+
+            ## COSINE ##
+            # shape : (batch, hidden_dim) @ (hidden_dim, num_samples) -> (batch, num_samples)
+            cosine_scores = norm_embeddings @ output_dict['norm_bank'].t()
+
+            # shape : (batch, )
+            cosine_score, _ = cosine_scores.max(-1)
+
+            max_cosine_list.append(cosine_score)
+        
+    max_cosine_list = torch.concat(max_cosine_list)
+
+    return max_cosine_list
+
 def main(args, save_config):
     seed_everything(args.train.seed)
 
     assert args.method_name in METHOD_TO_MODEL.keys()
     
     ## LOGGINGS ##
-    log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/opda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
+    log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/oda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
     
     # init logger
     logger_init(logger, log_dir)
@@ -206,17 +246,7 @@ def main(args, save_config):
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name_or_path)
 
     ## GET DATALOADER ##
-    train_dataloader, _, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.test.batch_size, max_length=args.train.max_length)
-
-    unknown_dataset = test_dataloader.dataset.filter(lambda sample: sample['labels'] == unknown_label)
-    adaptable_dataset = test_dataloader.dataset.filter(lambda sample: sample['labels'] != unknown_label)
-
-    
-    data_collator = DataCollatorWithPadding(tokenizer)
-    unknown_dataloader = DataLoader(unknown_dataset, collate_fn=data_collator, batch_size=args.test.batch_size, shuffle=False) 
-    adaptable_dataloader = DataLoader(adaptable_dataset, collate_fn=data_collator, batch_size=args.test.batch_size, shuffle=False) 
-
-    # pdb.set_trace()
+    train_dataloader, _, eval_dataloader, test_dataloader, source_test_dataloader = get_dataloaders_for_oda(tokenizer=tokenizer, root_path=args.dataset.root_path, task_name=args.dataset.name, seed=args.train.seed, num_common_class=args.dataset.num_common_class, batch_size=args.test.batch_size, max_length=args.train.max_length)
 
     ## INIT MODEL ##
     logger.info(f'Init model {args.method_name} ...')
@@ -239,16 +269,39 @@ def main(args, save_config):
     logger.info(f'Loading best model from : {model_dir}')
     model.load_state_dict(torch.load(model_dir))
 
-
+    
+    ####################
+    #                  #
+    #       Test       #
+    #                  #
+    ####################
+    
+    # get hidden representations
     output_dict = prepare_ood(model, dataloader=train_dataloader)
 
+    # test with cosine similarity
     best_results = cheating_test(model, test_dataloader, output_dict, unknown_label, metric_name='h_score', start=0.0, end=1.0, step=0.005)
 
-    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
+    print_dict(logger, string=f'\n\n** Cheating target domain test result using COSINE SIMILARITY', dict=best_results)
 
+    logger.info('Get Cosine Similarity Scores from train set')
+    max_cosine_list = get_cosine_scores(model, train_dataloader, output_dict)
+
+    score_count = len(max_cosine_list)
+    logger.info(f'Total count : {score_count}')
+
+    sorted_cosine_scores, _ = torch.sort(max_cosine_list, descending=True)
+    logger.info(f'Get H-score @ {args.test.fpr_rate}')
+    threshold_index = round(score_count * args.test.fpr_rate)
+    threshold = sorted_cosine_scores[threshold_index]
+
+    logger.info(f'* H-score @ {args.test.fpr_rate} with threshold {threshold}...')
+    results = test_with_threshold(model, test_dataloader, output_dict, unknown_label, threshold)
+
+    print_dict(logger, string=f'\n\n** COSINE SIMILARITY @ {args.test.fpr_rate}', dict=results)
+
+    
     logger.info('Done.')
-
-
 
 if __name__ == "__main__":
         

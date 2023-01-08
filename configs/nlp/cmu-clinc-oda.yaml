@@ -25,6 +25,7 @@ test:
   step: 0.005
   threshold: 0.5
   batch_size: 64
+  fpr_rate: 0.95
 
 log:
   output_dir: /home/heyjoonkim/data/universal_domain_adaptation/
