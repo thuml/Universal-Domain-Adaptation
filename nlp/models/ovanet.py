@@ -93,10 +93,13 @@ class OVANET(nn.Module):
         
         # shape : (batch, num_source_class)
         out = self.C1(cls_state)
+        out = F.softmax(out, 1)
         # shape : (batch, num_source_class * 2)
         out_open = self.C2(cls_state)
 
         predictions = out.argmax(dim=-1)
+        # shape : (batch, )
+        max_logits = out.max(dim=-1).values
 
         # shape : (batch, 2, num_source_class)
         out_open_reshaped = F.softmax(out_open.view(batch_size, 2, -1), 1)
@@ -117,6 +120,7 @@ class OVANET(nn.Module):
             'predictions' : predictions,
             'logits' : out,
             'logits_open' : out_open,
-            'max_logits' : pred_unk
+            # 'max_logits' : pred_unk
+            'max_logits' : max_logits
         }
     

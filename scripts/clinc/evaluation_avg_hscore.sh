@@ -121,4 +121,4 @@ lr='1e-5'
 python nlp/evaluation_avg_hscore.py --config configs/nlp/ovanet-clinc-opda.yaml --method_name $method --lr $lr --seed $seed 
 
 
-sh scripts/massive/evaluation_avg_hscore.sh
+# sh scripts/massive/evaluation_avg_hscore.sh

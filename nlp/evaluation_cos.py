@@ -166,7 +166,7 @@ def test_with_threshold(model, dataloader, output_dict, unknown_class, threshold
 
     model.eval()
     with torch.no_grad():
-        for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
+        for i, test_batch in enumerate(tqdm(dataloader, desc=f'Testing with threshold {threshold}')):
 
             test_batch = {k: v.cuda() for k, v in test_batch.items()}
             labels = test_batch['labels']
@@ -202,7 +202,6 @@ def get_cosine_scores(model, dataloader, output_dict):
         for i, test_batch in enumerate(tqdm(dataloader, desc='Testing')):
 
             test_batch = {k: v.cuda() for k, v in test_batch.items()}
-            labels = test_batch['labels']
 
             # shape : (batch, hidden_dim)
             embeddings = model(**test_batch, embeddings_only=True)
@@ -283,6 +282,8 @@ def main(args, save_config):
 
     # test with cosine similarity
     best_results = cheating_test(model, test_dataloader, output_dict, unknown_label, metric_name='h_score', start=0.0, end=1.0, step=0.005)
+
+    # logger.info(f'\n\n** Cheating target domain test result using COSINE SIMILARITY : {best_results.get("h_score")}')
 
     print_dict(logger, string=f'\n\n** Cheating target domain test result using COSINE SIMILARITY', dict=best_results)
 

@@ -42,8 +42,6 @@ METHOD_TO_MODEL = {
     'udalm' : udalm.UDALM,
 }
 
-THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu', 'udalm']
-
 def get_max_logits(model, dataloader):
     max_logits_list = []
 
@@ -96,7 +94,6 @@ def main(args, save_config):
 
     assert args.method_name in METHOD_TO_MODEL.keys()
 
-    thresholding = True if args.method_name in THRESHOLDING_METHODS else False
     
     ## LOGGINGS ##
     log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/opda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
@@ -147,25 +144,22 @@ def main(args, save_config):
     #                  #
     ####################
 
-    if thresholding:
+    # cheating test : target test set
+    # max_logits_list = get_max_logits(model, test_dataloader)
+    max_logits_list = get_max_logits(model, train_dataloader)
 
-        # cheating test : target test set
-        # max_logits_list = get_max_logits(model, test_dataloader)
-        max_logits_list = get_max_logits(model, train_dataloader)
+    # show results with threshold at 95%
+    total_count = len(max_logits_list)
+    logger.info(f'Total count : {total_count}')
+    sorted_logits, indices = torch.sort(max_logits_list, descending=True)
+    logger.info(f'Get  H-score@{args.test.fpr_rate}')
+    threshold_index = round(total_count * args.test.fpr_rate)
+    threshold = sorted_logits[threshold_index]
 
-        # show results with threshold at 95%
-        total_count = len(max_logits_list)
-        logger.info(f'Total count : {total_count}')
-        sorted_logits, indices = torch.sort(max_logits_list, descending=True)
-        logger.info(f'Get  H-score@{args.test.fpr_rate}')
-        threshold_index = round(total_count * args.test.fpr_rate)
-        threshold = sorted_logits[threshold_index]
-
-        logger.info(f'* H-score @ {args.test.fpr_rate} ...')
-        results = test_with_threshold(model, test_dataloader, unknown_label, threshold)
-        print_dict(logger, string=f'H-score @ {args.test.fpr_rate} with threshold {threshold}', dict=results)
-    else:
-        logger.info('Not a thresholding method, Pass')
+    logger.info(f'* H-score @ {args.test.fpr_rate} ...')
+    results = test_with_threshold(model, test_dataloader, unknown_label, threshold)
+    print_dict(logger, string=f'H-score @ {args.test.fpr_rate} with threshold {threshold}', dict=results)
+    
 
     logger.info('Done.')
 

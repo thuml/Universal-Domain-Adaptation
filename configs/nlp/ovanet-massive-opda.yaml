@@ -23,6 +23,10 @@ train:
 
 test:
   batch_size: 64
+  fpr_rate: 0.95
+  min_threshold: 0.0
+  max_threshold: 1.0
+  step: 0.005
 
 log:
   output_dir: /home/heyjoonkim/data/universal_domain_adaptation/

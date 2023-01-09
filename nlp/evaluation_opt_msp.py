@@ -42,9 +42,6 @@ METHOD_TO_MODEL = {
     'udalm' : udalm.UDALM,
 }
 
-THRESHOLDING_METHODS = ['fine_tuning', 'dann', 'uan', 'cmu', 'udalm']
-
-
 def cheating_cosine_test(model, dataloader, output_dict, unknown_class, metric_name='total_accuracy', start=0.0, end=1.0, step=0.005):
     thresholds = list(np.arange(start, end, step))
     num_thresholds = len(thresholds)
@@ -399,7 +396,6 @@ def main(args, save_config):
 
     assert args.method_name in METHOD_TO_MODEL.keys()
 
-    thresholding = True if args.method_name in THRESHOLDING_METHODS else False
     
     ## LOGGINGS ##
     log_dir = f'{args.log.output_dir}/{args.dataset.name}/{args.method_name}/opda/common-class-{args.dataset.num_common_class}/{args.train.seed}/{args.train.lr}'
@@ -460,45 +456,45 @@ def main(args, save_config):
     #                  #
     ####################
 
-    # eval : source eval set
-    results = cheating_eval(model, eval_dataloader, unknown_label, is_cda=False, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
+    # # eval : source eval set
+    # results = cheating_eval(model, eval_dataloader, unknown_label, is_cda=False, start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
             
-    print_dict(logger, string=f'\n\n** CHEATING SOURCE EVAL RESULT', dict=results)
+    # print_dict(logger, string=f'\n\n** CHEATING SOURCE EVAL RESULT', dict=results)
 
-    eval_threshold = results['threshold']
+    # eval_threshold = results['threshold']
 
-    # test : target test set
-    results = test_with_threshold(model, test_dataloader, unknown_label, eval_threshold)
-    print_dict(logger, string=f'\n\n** TARGET TEST RESULT with OPT-MSP threshold {eval_threshold}', dict=results)
+    # # test : target test set
+    # results = test_with_threshold(model, test_dataloader, unknown_label, eval_threshold)
+    # print_dict(logger, string=f'\n\n** EVAL BEST results with threshold {eval_threshold}', dict=results)
 
-    if args.test.threshold is not None:
-        # test : target test set
-        results = test_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
-        print_dict(logger, string=f'\n\n** TARGET TEST with fixed threshold {args.test.threshold}', dict=results)
+    # if args.test.threshold is not None:
+    #     # test : target test set
+    #     results = test_with_threshold(model, test_dataloader, unknown_label, args.test.threshold)
+    #     print_dict(logger, string=f'\n\n** TARGET TEST with fixed threshold {args.test.threshold}', dict=results)
 
     # cheating test : target test set
     results, max_logits_list = cheating_test(model, test_dataloader, unknown_label, metric_name='h_score', start=args.test.min_threshold, end=args.test.max_threshold, step=args.test.step)
-    print_dict(logger, string=f'\n\n** OPTIMAL TARGET TEST RESULT', dict=results)
+    print_dict(logger, string=f'\n\n** OPT-MSP results', dict=results)
 
 
+    # calculate MSP@95
     # show results with threshold at 95%
-    ratio = 0.9
+    ratio = args.test.fpr_rate
 
     total_count = len(max_logits_list)
     sorted_logits, indices = torch.sort(max_logits_list, descending=True)
     threshold_index = round(total_count * ratio)
     threshold = sorted_logits[threshold_index]
 
-    logger.info(f'* H-score @ {ratio} ...')
+    logger.info(f'* MSP @ {ratio} ...')
     results = test_with_threshold(model, test_dataloader, unknown_label, threshold)
-    print_dict(logger, string=f'H-score @ {ratio} with threshold {threshold}', dict=results)
+    print_dict(logger, string=f'MSP @ {ratio} with threshold {threshold}', dict=results)
 
 
-    output_dict = prepare_ood(model, dataloader=train_dataloader)
-
-    best_results = cheating_cosine_test(model, test_dataloader, output_dict, unknown_label, metric_name='h_score', start=0.0, end=1.0, step=0.005)
-
-    print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
+    # # calculate Opt-Cos
+    # output_dict = prepare_ood(model, dataloader=train_dataloader)
+    # best_results = cheating_cosine_test(model, test_dataloader, output_dict, unknown_label, metric_name='h_score', start=0.0, end=1.0, step=0.005)
+    # print_dict(logger, string=f'\n\n** CHEATING TARGET DOMAIN TEST RESULT USING COSINE SIMILARITY', dict=best_results)
 
     logger.info('Done.')
 
