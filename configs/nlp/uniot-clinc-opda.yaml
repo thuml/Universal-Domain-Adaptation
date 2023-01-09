@@ -23,7 +23,7 @@ train:
   mu: 0.7
   temp: 0.1
   lam: 0.1
-  MQ_size: 1000
+  MQ_size: 1000               # original value = 2000
 
 test:
   min_threshold: 0.0
