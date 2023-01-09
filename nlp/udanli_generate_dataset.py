@@ -74,7 +74,7 @@ def main(args, save_config):
 
     
     output_file = os.path.join(data_path, f'nli_{NUM_ENTAILMENT}.jsonl')
-    """
+    
     with open(output_file, 'w') as f:
         for first_sample in tqdm(train_data, desc='Generating NLI samples'):
             label = first_sample.get(coarse_label)
@@ -152,7 +152,7 @@ def main(args, save_config):
                 
                 # f.write(f'{sample}\n')
                 f.write(json.dumps(sample, ensure_ascii=False) + '\n')
-
+    """
     output_file = os.path.join(data_path, f'ent_{NUM_ENTAILMENT}.jsonl')
 
     with open(output_file, 'w') as f:
@@ -173,7 +173,6 @@ def main(args, save_config):
                 
                 f.write(json.dumps(sample, ensure_ascii=False) + '\n')
 
-    """
     output_file = os.path.join(data_path, f'ent_{NUM_ENTAILMENT}-2.jsonl')
 
     with open(output_file, 'w') as f:
@@ -193,7 +192,7 @@ def main(args, save_config):
                 }
                 
                 f.write(json.dumps(sample, ensure_ascii=False) + '\n')
-
+    """
 
 if __name__ == "__main__":
         
