@@ -198,6 +198,109 @@ def get_dataloaders(tokenizer, root_path, task_name, seed, num_common_class, bat
     return train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader
 
 
+def get_dataloaders_prompt(tokenizer, root_path, task_name, seed, num_common_class, batch_size, max_length, source=None, target=None, use_soft_prompt=False, use_hard_prompt=False, n_tokens=10):
+    ## same as get_dataloaders if use_soft_prompt=False, use_hard_prompt=False
+    ## LOAD DATASETS ##
+    # source, target, source, target, source
+    train_data, train_unlabeled_data, val_data, test_data, source_test_data = load_full_dataset(root_path, task_name, seed, num_common_class, source, target)
+    
+    print('# Data per split :')
+    print('SOURCE TRAIN / TARGET UNLABELED TRAIN / SOURCE VALIDATION / SOURCE TEST / TARGET TEST')
+    print(f'{len(train_data)} / {len(train_unlabeled_data)} / {len(val_data)} / {len(source_test_data)}  / {len(test_data)}')        
+    
+    # input keys
+    coarse_label, fine_label, input_key = 'coarse_label', 'fine_label', 'text'
+
+    if source is not None and target is not None:
+        coarse_label, fine_label, input_key = 'label', 'label', 'sentence'
+
+    # default tokenizing function
+    def preprocess_function_base(examples):
+        texts = (examples[input_key],)
+        result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True)
+        
+        if coarse_label in examples:
+            result["labels"] = examples[coarse_label]
+
+        return result
+    def preprocess_function_prompt_soft(examples):
+        texts = (examples[input_key],)
+        result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True)
+        for i in range(len(result['input_ids'])):
+            ## Add placeholder tokens which are to be replaced with soft tokens later
+            result['input_ids'][i] = result['input_ids'][i][:-1] + [500] * n_tokens + [tokenizer.mask_token_id, tokenizer.sep_token_id]
+            result['attention_mask'][i] = result['attention_mask'][i][:-1] + [1] * (n_tokens + 2)
+            if 'token_type_ids' in result.keys():
+                result['token_type_ids'][i] = result['token_type_ids'][i][:-1] + [0] * (n_tokens + 2)
+        if coarse_label in examples:
+            result["labels"] = examples[coarse_label]
+
+        return result
+    def preprocess_function_prompt_hard(examples):
+        hard_prompt = " It is <mask>"
+        hard_prompt_tokenized = tokenizer(hard_prompt, add_special_tokens=False)
+        texts = (examples[input_key],)
+        result = tokenizer(*texts, padding=False, max_length=max_length, truncation=True) # hard prompt ('it is [mask]') length as embedding: 3
+        for key in result.keys():
+            for i in range(len(result[key])):
+                result[key][i] = result[key][i][:-1] + hard_prompt_tokenized[key] + [result[key][i][-1]]
+        if coarse_label in examples:
+            result["labels"] = examples[coarse_label]
+
+        return result
+    if use_soft_prompt:        
+        preprocess_function = preprocess_function_prompt_soft 
+    elif use_hard_prompt:
+        preprocess_function = preprocess_function_prompt_hard 
+    else:
+        preprocess_function = preprocess_function_base
+    ## TOKENIZE ##
+    # labeled dataset
+    train_dataset = train_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=train_data.column_names,
+        desc="Running tokenizer on source train dataset",
+    )
+    train_unlabeled_dataset = train_unlabeled_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=train_unlabeled_data.column_names,
+        desc="Running tokenizer on source train dataset",
+    )
+    eval_dataset = val_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=val_data.column_names,
+        desc="Running tokenizer on source eval dataset",
+    )
+    test_dataset = test_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=test_data.column_names,
+        desc="Running tokenizer on target test dataset",
+    )
+    source_test_dataset = source_test_data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=source_test_data.column_names,
+        desc="Running tokenizer on target test dataset",
+    )
+
+    # data_collator = default_data_collator
+    data_collator = DataCollatorWithPadding(tokenizer)
+    
+    train_dataloader = DataLoader(train_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    # unused in fine-tuning
+    train_unlabeled_dataloader = DataLoader(train_unlabeled_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=True)
+    eval_dataloader = DataLoader(eval_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False)   
+    test_dataloader = DataLoader(test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
+    source_test_dataloader = DataLoader(source_test_dataset, collate_fn=data_collator, batch_size=batch_size, shuffle=False) 
+    
+    return train_dataloader, train_unlabeled_dataloader, eval_dataloader, test_dataloader, source_test_dataloader
+
+
+
 
 def get_datasets(root_path, task_name, seed, num_common_class, source=None, target=None):
     ## LOAD DATASETS ##
